@@ -2,21 +2,16 @@
  * NDPluginCircularBuff.cpp
  *
  * Scope style triggered image recording
- * Author: Alan Greer/Edmund Warrick
+ * Author: Alan Greer
  *
  * Created June 21, 2013
  */
-
-// ###TODO: Rename references to "counts" (for ADC mode) with "samples", as this is less ambiguous.
 
 // C dependencies
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
-
-// C++ dependencies
-using namespace std;
 
 // EPICS dependencies
 #include <epicsString.h>
@@ -32,134 +27,6 @@ using namespace std;
 #define MIN(A,B) (A)<(B)?(A):(B)
 
 static const char *driverName="NDPluginCircularBuff";
-
-int NDPluginCircularBuff::containsTriggerStart()
-{
-  // ###TODO: Implement
-  int startCondition, nChannels, nSamples, triggerFound = 0;
-  double threshold, *buffer;
-  NDArray *newestArray;
-  NDArrayInfo_t *arrayInfo;
-  NDDimension_t *dims;
-  // Get the start condition and threshold.
-  getIntegerParam(NDPluginCircularBuffTriggerStartCondition, &startCondition);
-  getDoubleParam(NDPluginCircularBuffTriggerStartThreshold, &threshold);
-  // Get the most recent array from the buffer
-  newestArray = arrayBuffer_->back();
-  // Get the dimensions
-  // Get a pointer to the data buffer.
-  buffer = (double *)newestArray->pData;
-  dims = newestArray->dims;
-  nChannels = dims[0];
-  nSamples = dims[1];
-  // We use convention that x=channel #, y=time, so data is arranged:
-  // ( c0t0 c1t0 c2t0 ... cnt0 c0t1 c1t1 ... cnt1 c0t2 ... )
-  // Going to choose convention that dims[0] = x, dims[1] = y and ignore value of xDim, yDim in NDArrayInfo for now.
-  int triggerChannel;
-  getIntegerParam(NDPluginCircularBuffTriggerChannel, &triggerChannel);
-  if (triggerChannel > nChannels) {
-      // Bugger
-      // ###TODO: Move array validation to a single point of responsibility, not here!
-  }
-
-  // Find offset into buffer of this array (i.e. total buffer size - this array size, since this is the last array in the buffer)
-  int arrayOffset = bufferSizeCounts(0) - nSamples;
-
-  for (int sample = 0; sample < nSamples; sample++) {
-      // Trigger channel value is sample no. * no. channels + trigger channel
-      double triggerVal = sample * nChannels + triggerChannel;
-      // For each trigger element,
-  //   If <element.triggerchannel meets condition>
-      if (startCondition) { // Trigger on high level
-	  if (triggerVal > threshold) {
-	      triggerStartOffset_ = arrayOffset + sample;
-	      triggerFound = 1;
-	      break;
-	  }
-      } else { // Trigger on low level
-	  if (triggerVal < threshold) {
-	      triggerStartOffset_ = arrayOffset + sample;
-	      triggerFound = 1;
-	      break;
-	  }
-      }
-  }
-
-  return triggerFound;
-}
-
-// ###TODO: This relies on gate start being set accurately, so we need to make sure cases where we trigger based on something else (soft trigger or attribute)
-// handle this case properly.
-int NDPluginCircularBuff::containsTriggerEnd()
-{
-  // ###TODO: Implement
-
-  int endCondition, startOffset, nChannels, nSamples, triggerFound = 0;
-  double threshold, *buffer;
-  NDArray *newestArray;
-  NDArrayInfo_t *arrayInfo;
-  NDDimension_t *dims;
-  // Get end condition and threshold
-  getIntegerParam(NDPluginCircularBuffTriggerEndCondition, &endCondition);
-  // Get start offset
-  // Get current array from buffer.
-  // Get its start offset. (buffer size - array size)
-  // If start offset > array offset search from start offset
-  // Else start from beginning of array.
-  // Get pointer to array data.
-  // For each element,
-  //   If <element.triggerchannel meets condition>
-  //     Set gateEndOffset_ to current index
-  //     break
-  // If found gate end
-  //   return 1
-  // else
-  //   return 0
-  return 0;
-}
-
-// Not all three counts must be calculated since none can be assumed to be a fixed size. In particular a bad frame may arrive at any point
-// in the window, causing a buffer flush.
-//  - pre-trigger: Will be truncated if trigger arrived before buffer full or if bad frame arrives while filling.
-//      - No - if no trigger received should not output anything. Should return Null in this case.
-//  - gate: Will inherently vary in size. If bad frame arrived after gate start, gate start will be set but not gate end.
-//  - post-trigger: Will be truncated if a bad frame arrives after gate end but before post trigger full.
-NDArray *NDPluginCircularBuff::constructOutput()
-{
-  // ###TODO: Implement
-  // If gateStartCount < 0
-  //   return null
-  // Find real pre-trigger counts (this is min of pre-count param, gateStartOffset).
-  // Find gate size (If gateEnd < 0 this is (buffer size - gateStart), else (gateEnd - gateStart))
-  // Find real post-trigger counts (If gateEnd < 0 this is 0, else this is min (buffer size - gateEnd, post-count param)).
-  // Output size is (pre-trigger + gate size + post-trigger)
-  // Allocate buffer of (output size * # channels), correct data type.
-  // Offset is (gateStart - pre-trigger counts).
-  // buffer offset is 0.
-  // For each array:
-  //   copy from offset to min((array size - offset), (output size - buffer offset)) to target buffer.
-  //   Increment offset and buffer offset by # of written bytes.
-  // Allocate NDArray using the target buffer.
-  // return this NDArray.
-  // Handle the rump data (i.e. whatever's left at the end of the post trigger).
-  return NULL;
-}
-
-int NDPluginCircularBuff::bufferSizeCounts(int start)
-{
-  // ###TODO: Implement
-  // Initialise count to 0.
-  // Get buffer iterator.
-  // While not at end
-  //   If index >= start
-  //     count += iterator->size()
-  //   Advance iterator
-  // return count
-  // ###TODO: In most cases it would be best to implement this as a class variable which is increased/decreased
-  // whenever we add/remove an array. This would both be more efficient than recomputing each time and would
-  // mean we could expose it as a read-only parameter.
-  return 0;
-}
 
 /** Callback function that is called by the NDArray driver with new NDArray data.
   * Stores the number of pre-trigger images prior to the trigger in a ring buffer.
@@ -178,8 +45,6 @@ void NDPluginCircularBuff::processCallbacks(NDArray *pArray)
     NDAttribute *triggerAttribute;
     NDArrayInfo arrayInfo;
     int triggered = 0;
-    // ###TODO: This would be a good candidate for an enum.
-    int mode = 0;
 
     //const char* functionName = "processCallbacks";
 
@@ -204,20 +69,16 @@ void NDPluginCircularBuff::processCallbacks(NDArray *pArray)
         triggered = 1;
         setIntegerParam(NDPluginCircularBuffTriggered, triggered);
       } else {
-	  getIntegerParam(NDPluginCircularBuffTriggered, &triggered);
-	  getIntegerParam(NDPluginCircularBuffADCMode, &mode);
-	  if (!triggered) {
-	      // Check for the trigger meta-data in the NDArray
-	      triggerAttribute = pArray->pAttributeList->find(NDPluginCircularBuffTriggeredAttribute);
-	      if (triggerAttribute != NULL){
-		  // Read the attribute to see if a trigger happened on this frame
-		  triggerAttribute->getValue(NDAttrInt32, (void *)&triggered);
-		  setIntegerParam(NDPluginCircularBuffTriggered, triggered);
-	      }
-	  } else if (mode == 1) {  // If in ADC mode, search for trigger condition in data.
-	      triggered = containsTriggerStart();
-	      setIntegerParam(NDPluginCircularBuffTriggered, triggered);
-	  }
+        getIntegerParam(NDPluginCircularBuffTriggered, &triggered);
+        if (!triggered) { 
+          // Check for the trigger meta-data in the NDArray
+          triggerAttribute = pArray->pAttributeList->find(NDPluginCircularBuffTriggeredAttribute);
+          if (triggerAttribute != NULL){
+          // Read the attribute to see if a trigger happened on this frame
+          triggerAttribute->getValue(NDAttrInt32, (void *)&triggered);
+          setIntegerParam(NDPluginCircularBuffTriggered, triggered);
+          }
+        }
       }
 
       // First copy the buffer into our buffer pool so we can release the resource on the driver
@@ -234,101 +95,52 @@ void NDPluginCircularBuff::processCallbacks(NDArray *pArray)
         // Have we detected a trigger event yet?
         if (!triggered){
             // No trigger so add the NDArray to the pre-trigger ring
-            if (mode == 0) { // camera mode
-        	arrayBuffer_->push_back(pArrayCpy);
-        	if (arrayBuffer_->size() > (size_t)preCount) {
-        	    pOldArray_ = arrayBuffer_->front();
-        	    pOldArray_->release();
-        	    pOldArray_ = NULL;
-        	    arrayBuffer_->pop_front();
-        	}
-
-
-        	// Set the size
-        	setIntegerParam(NDPluginCircularBuffCurrentImage,  arrayBuffer_->size());
-        	if (arrayBuffer_->size() == (size_t)preCount){
-        	    setStringParam(NDPluginCircularBuffStatus, "Buffer Wrapping");
-        	}
-            } else if (mode == 1) { // ADC mode
-                // Add new frame to buffer to construct the pre-trigger window
-        	arrayBuffer_->push_back(pArrayCpy);
-
-        	// Prune the oldest data as for camera mode, but here we use the total number of counts stored in all the NDArrays,
-        	// not the number of NDArrays. If the oldest stored buffer no longer contains any counts needed for the pre-trigger,
-        	// we can prune it.
-        	int preCounts;
-        	getIntegerParam(NDPluginCircularBuffPreTriggerSamples, &preCounts);
-        	while (arrayBuffer_->size() > 0 && bufferSizeCounts(1) > preCounts) {
-        	    pOldArray_ = arrayBuffer_->front();
-        	    pOldArray_->release();
-        	    pOldArray_ = NULL;
-        	    arrayBuffer_->pop_front();
-        	}
+            preBuffer_->push_back(pArrayCpy);
+            if (preBuffer_->size() > (size_t)preCount) {
+        	pOldArray_ = preBuffer_->front();
+        	pOldArray_->release();
+        	pOldArray_ = NULL;
+        	preBuffer_->pop_front();
             }
-        } else { // triggered
-            // Trigger detected
-            // If camera mode
-            // Start making frames available if trigger has occured
-            setStringParam(NDPluginCircularBuffStatus, "Flushing");
 
-            if (mode == 0) { // Camera mode
-        	// Has the trigger occured on this frame?
-        	if (previousTrigger_ == 0){
-        	    previousTrigger_ = 1;
+          // Set the size
+          setIntegerParam(NDPluginCircularBuffCurrentImage,  preBuffer_->size());
+          if (preBuffer_->size() == (size_t)preCount){
+            setStringParam(NDPluginCircularBuffStatus, "Buffer Wrapping");
+          }
+        } else {
+          // Trigger detected
+          // Start making frames available if trigger has occured
+          setStringParam(NDPluginCircularBuffStatus, "Flushing");
 
-        	    // Yes, so flush the ring first
-        	    while (arrayBuffer_->size() > 0){
-        		this->unlock();
-        		doCallbacksGenericPointer(arrayBuffer_->front(), NDArrayData, 0);
-        		this->lock();
-        		arrayBuffer_->front()->release();
-        		arrayBuffer_->pop_front();
+          // Has the trigger occured on this frame?
+          if (previousTrigger_ == 0){
+            previousTrigger_ = 1;
 
-        	    }
-        	}
+            // Yes, so flush the ring first
+            while (preBuffer_->size() > 0){
+              this->unlock();
+              doCallbacksGenericPointer(preBuffer_->front(), NDArrayData, 0);
+              this->lock();
+              preBuffer_->front()->release();
+              preBuffer_->pop_front();
 
-        	currentPostCount++;
-        	setIntegerParam(NDPluginCircularBuffPostCount,  currentPostCount);
-
-        	this->unlock();
-        	doCallbacksGenericPointer(pArrayCpy, NDArrayData, 0);
-        	this->lock();
-        	if (pArrayCpy){
-        	    pArrayCpy->release();
-        	}
-            } else { // ADC mode
-        	// Always add the array to our buffer, to construct the post-trigger window.
-        	// ###TODO: Duplicates pre-trigger branch, consider restructuring.
-        	arrayBuffer_->push_back(pArrayCpy);
-
-        	int triggerEnded;
-        	getIntegerParam(NDPluginCircularBuffTriggerEnded, &triggerEnded);
-        	if (!triggerEnded) {
-        	    triggerEnded = containsTriggerEnd();
-        	    setIntegerParam(NDPluginCircularBuffTriggerEnded, triggerEnded);
-        	}
-        	// Decide whether we are ready to output data yet - this depends on whether we
-        	// have enough data stored to fill the post-trigger buffer.
-        	// We don't care for this purpose how many pre-trigger counts we have, nor how long the
-        	// gate window is.
-        	if (triggerEnded) {
-        	    int currentPostSize = bufferSizeCounts(0) - triggerEndOffset_;
-        	    int postSize;
-        	    getIntegerParam(NDPluginCircularBuffPostTriggerSamples, &postSize);
-        	    // If we've reached our target, readout.
-        	    if (currentPostSize >= postSize) {
-        		NDArray *outputArray = constructOutput();
-        		this->unlock();
-        		doCallbacksGenericPointer(outputArray, NDArrayData, 0);
-        		this->lock();
-        		// ### TODO: Teardown buffer ready for next trigger.
-        	    }
-        	}
             }
+          }
+      
+          currentPostCount++;
+          setIntegerParam(NDPluginCircularBuffPostCount,  currentPostCount);
+
+          this->unlock();
+          doCallbacksGenericPointer(pArrayCpy, NDArrayData, 0);
+          this->lock();
+          if (pArrayCpy){
+            pArrayCpy->release();
+          }
         }
 
         // Stop recording once we have reached the post-trigger count, wait for a restart
-        if (mode == 0 && currentPostCount >= postCount){
+        if (currentPostCount >= postCount){
           setIntegerParam(NDPluginCircularBuffControl, 0);
           setStringParam(NDPluginCircularBuffStatus, "Acquisition Completed");
         }
@@ -342,8 +154,6 @@ void NDPluginCircularBuff::processCallbacks(NDArray *pArray)
     callParamCallbacks();
 }
 
-
-
 /** Called when asyn clients call pasynInt32->write().
   * This function performs actions for some parameters.
   * For all parameters it sets the value in the parameter library and calls any registered callbacks..
@@ -353,21 +163,18 @@ asynStatus NDPluginCircularBuff::writeInt32(asynUser *pasynUser, epicsInt32 valu
 {
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
-    int preCount;
     static const char *functionName = "writeInt32";
 
-    // ###TODO: Implement ADC-specific params.
     if (function == NDPluginCircularBuffControl){
 	if (value == 1){
 	    // If the control is turned on then create our new ring buffer
-	    getIntegerParam(NDPluginCircularBuffPreTrigger,  &preCount);
-	    if (arrayBuffer_){
-		for (std::deque<NDArray *>::iterator iter = arrayBuffer_->begin(); iter != arrayBuffer_->end(); ++iter) {
+	    if (preBuffer_){
+		for (std::deque<NDArray *>::iterator iter = preBuffer_->begin(); iter != preBuffer_->end(); ++iter) {
 		    (*iter)->release();
 		}
-		delete arrayBuffer_;
+		delete preBuffer_;
 	    }
-	    arrayBuffer_ = new deque<NDArray *>();
+	    preBuffer_ = new std::deque<NDArray *>();
 	    if (pOldArray_){
 		pOldArray_->release();
           }
@@ -417,8 +224,8 @@ asynStatus NDPluginCircularBuff::writeInt32(asynUser *pasynUser, epicsInt32 valu
         getIntegerParam(NDPluginCircularBuffPreTrigger,  &preCount);
         if ((preCount + value) > (maxBuffers_ - 1)){
           setStringParam(NDPluginCircularBuffStatus, "Post count too high");
-        } else if (value <= 0) {
-          setStringParam(NDPluginCircularBuffStatus, "Post count must be at least 1");
+        } else if (value < 1) {
+          setStringParam(NDPluginCircularBuffStatus, "Post count must be greater than zero");
         } else {
           // Set the parameter in the parameter library.
           status = (asynStatus) setIntegerParam(function, value);
@@ -479,35 +286,19 @@ NDPluginCircularBuff::NDPluginCircularBuff(const char *portName, int queueSize, 
                    0, 1, priority, stackSize)
 {
     //const char *functionName = "NDPluginCircularBuff";
-    arrayBuffer_ = NULL;
+    preBuffer_ = NULL;
 
     maxBuffers_ = maxBuffers;
 
-    // General
+    // Scope
     createParam(NDPluginCircularBuffControlString,      asynParamInt32,      &NDPluginCircularBuffControl);
     createParam(NDPluginCircularBuffStatusString,       asynParamOctet,      &NDPluginCircularBuffStatus);
-    createParam(NDPluginCircularBuffSoftTriggerString,  asynParamInt32,      &NDPluginCircularBuffSoftTrigger);
-    createParam(NDPluginCircularBuffTriggeredString,    asynParamInt32,      &NDPluginCircularBuffTriggered);
-    createParam(NDPluginCircularBuffADCModeString,            asynParamInt32,   &NDPluginCircularBuffADCMode);
-
-    // Scope
     createParam(NDPluginCircularBuffPreTriggerString,   asynParamInt32,      &NDPluginCircularBuffPreTrigger);
     createParam(NDPluginCircularBuffPostTriggerString,  asynParamInt32,      &NDPluginCircularBuffPostTrigger);
     createParam(NDPluginCircularBuffCurrentImageString, asynParamInt32,      &NDPluginCircularBuffCurrentImage);
     createParam(NDPluginCircularBuffPostCountString,    asynParamInt32,      &NDPluginCircularBuffPostCount);
-
-    // ADC
-    createParam(NDPluginCircularBuffTriggerDimensionString,      asynParamInt32,   &NDPluginCircularBuffTriggerDimension); // Hard-code to 1 for now
-    createParam(NDPluginCircularBuffTriggerChannelString,        asynParamInt32,   &NDPluginCircularBuffTriggerChannel);
-    createParam(NDPluginCircularBuffPreTriggerSamplesString,     asynParamInt32,   &NDPluginCircularBuffPreTriggerSamples);
-    createParam(NDPluginCircularBuffPostTriggerSamplesString,    asynParamInt32,   &NDPluginCircularBuffPostTriggerSamples);
-    createParam(NDPluginCircularBuffTriggerStartConditionString, asynParamInt32,   &NDPluginCircularBuffTriggerStartCondition);
-    createParam(NDPluginCircularBuffTriggerEndConditionString,   asynParamInt32,   &NDPluginCircularBuffTriggerEndCondition);
-    createParam(NDPluginCircularBuffTriggerStartThresholdString, asynParamFloat64, &NDPluginCircularBuffTriggerStartThreshold);
-    createParam(NDPluginCircularBuffTriggerEndThresholdString,   asynParamFloat64, &NDPluginCircularBuffTriggerEndThreshold);
-    createParam(NDPluginCircularBuffTriggerMaxString,            asynParamInt32,   &NDPluginCircularBuffTriggerMax);
-    createParam(NDPluginCircularBuffTriggerEndedString,          asynParamInt32,   &NDPluginCircularBuffTriggerEnded);
-    createParam(NDPluginCircularBuffTriggerCountString,          asynParamInt32,   &NDPluginCircularBuffTriggerCount);
+    createParam(NDPluginCircularBuffSoftTriggerString,  asynParamInt32,      &NDPluginCircularBuffSoftTrigger);
+    createParam(NDPluginCircularBuffTriggeredString,    asynParamInt32,      &NDPluginCircularBuffTriggered);
 
     // Set the plugin type string
     setStringParam(NDPluginDriverPluginType, "NDPluginCircularBuff");
@@ -525,27 +316,6 @@ NDPluginCircularBuff::NDPluginCircularBuff(const char *portName, int queueSize, 
     // Init the pre and post count to 100
     setIntegerParam(NDPluginCircularBuffPreTrigger, 100);
     setIntegerParam(NDPluginCircularBuffPostTrigger, 100);
-
-    // Init to camera mode
-    setIntegerParam(NDPluginCircularBuffADCMode, 0);
-
-    // Set to concatenate on dimension 1 (though no enforcement to use 2d arrays yet).
-    setIntegerParam(NDPluginCircularBuffTriggerDimension, 1);
-    setIntegerParam(NDPluginCircularBuffTriggerChannel, 1);
-
-    setIntegerParam(NDPluginCircularBuffPreTriggerSamples, 100);
-    setIntegerParam(NDPluginCircularBuffPostTriggerSamples, 100);
-
-    setIntegerParam(NDPluginCircularBuffTriggerStartCondition, 1);
-    setIntegerParam(NDPluginCircularBuffTriggerEndCondition, 0);
-
-    setDoubleParam(NDPluginCircularBuffTriggerStartThreshold, 1.0);
-    setDoubleParam(NDPluginCircularBuffTriggerEndThreshold, 0.0);
-
-    setIntegerParam(NDPluginCircularBuffTriggerMax, 0);
-
-    setIntegerParam(NDPluginCircularBuffTriggerEnded, 0);
-    setIntegerParam(NDPluginCircularBuffTriggerCount, 0);
 
     // Try to connect to the array port
     connectToArrayPort();

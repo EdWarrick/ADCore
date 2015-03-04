@@ -40,6 +40,7 @@ DB += NDStdArrays.template
 DB += NDTransform.template
 DB += NDAttribute.template
 DB += NDCircularBuff.template
+DB += NDReframe.template
 
 #----------------------------------------------------
 # If <anyname>.db template is not named <anyname>*.template add

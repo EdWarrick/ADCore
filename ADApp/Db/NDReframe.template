@@ -1,0 +1,104 @@
+# Macros:
+# % macro, P,         Device Prefix
+# % macro, R,         Device Suffix
+# % macro, PORT,      Asyn Port name
+# % macro, PRECOUNT,  Pre-trigger frame count
+# % macro, POSTCOUNT, Post-trigger frame count
+# % gui, $(PORT), edmtab, NDReframe.edl, P=$(P),R=$(R)
+
+# # Control record, are we running
+record(busy, "$(P)$(R)Capture") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_CONTROL")
+  field(ZNAM, "Done")
+  field(ZSV,  "NO_ALARM")
+  field(ONAM, "Capture")
+  field(OSV,  "MINOR")
+}
+
+# # Control readback record
+record(bi, "$(P)$(R)Capture_RBV") {
+  field(SCAN, "I/O Intr")
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_CONTROL")
+  field(ZNAM, "Done")
+  field(ZSV,  "NO_ALARM")
+  field(ONAM, "Capturing")
+  field(OSV,  "MINOR")
+}
+
+# # Status message
+record(stringin, "$(P)$(R)StatusMessage")
+{
+    field(PINI, "1")
+    field(DTYP, "asynOctetRead")
+    field(INP,  "@asyn($(PORT) 0)REFRAME_STATUS")
+    field(SCAN, "I/O Intr")
+}
+
+# # Number of pre-count frames
+record(longout, "$(P)$(R)PRECOUNT") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_PRE_SAMPLES")
+  field(VAL, "$(PRECOUNT=100)")
+  field(PINI, "1")
+}
+
+# # Number of pre-count frames readback from driver
+#record(longin, "$(P)$(R)PRECOUNT_RBV") {
+#  field(SCAN, "I/O Intr")
+#  field(DTYP, "asynInt32")
+#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_PRE_TRIGGER")
+#}
+
+# # Number of post-count frames
+record(longout, "$(P)$(R)POSTCOUNT") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_POST_SAMPLES")
+  field(VAL, "$(POSTCOUNT=100)")
+  field(PINI, "1")
+}
+
+# # Number of post-count frames readback from driver
+#record(longin, "$(P)$(R)POSTCOUNT_RBV") {
+#  field(SCAN, "I/O Intr")
+#  field(DTYP, "asynInt32")
+#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_POST_TRIGGER")
+#}
+
+# # Size of pre count buffer
+#record(longin, "$(P)$(R)CurrentQty_RBV") {
+#  field(SCAN, "I/O Intr")
+#  field(DTYP, "asynInt32")
+#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_CURRENT_IMAGE")
+#}
+
+# # Size of post trigger frames made available
+#record(longin, "$(P)$(R)PostTriggerQty_RBV") {
+#  field(SCAN, "I/O Intr")
+#  field(DTYP, "asynInt32")
+#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_POST_COUNT")
+#}
+
+# # Force a soft trigger
+record(busy, "$(P)$(R)Trigger") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_SOFT_TRIGGER")
+  field(ZNAM, "Done")
+  field(ZSV,  "NO_ALARM")
+  field(ONAM, "Trigger")
+  field(OSV,  "MINOR")
+  field(VAL, "1")
+}
+
+# # Has a trigger been received
+record(bi, "$(P)$(R)Trigger_RBV") {
+  field(SCAN, "I/O Intr")
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_TRIGGERED")
+  field(ZNAM, "Done")
+  field(ZSV,  "NO_ALARM")
+  field(ONAM, "Triggered")
+  field(OSV,  "MINOR")
+}
+
