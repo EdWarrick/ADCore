@@ -34,6 +34,8 @@ typedef enum NDPluginReframeMode {
 #define NDPluginReframeTriggerCountString          "REFRAME_TRIGGER_COUNT" /* (asynInt32,        r/o) Triggers detected so far */
 #define NDPluginReframeTriggerEndedString          "REFRAME_TRIGGER_ENDED" /* (asynInt32,        r/o) Has end of gate been seen? Counterpart to
                                                                                                               NDPluginReframeTriggered */
+#define NDPluginReframeBufferFramesString          "REFRAME_BUFFER_FRAMES" /* (asynInt32,        r/o) Number of arrays stored in buffer */
+#define NDPluginReframeBufferSamplesString         "REFRAME_BUFFER_SAMPLES"/* (asynInt32,        r/o) Number of samples stored in buffer */
 
 class epicsShareClass NDPluginReframe : public NDPluginDriver {
 public:
@@ -64,7 +66,9 @@ protected:
     int NDPluginReframeTriggerMax;
     int NDPluginReframeTriggerEnded;
     int NDPluginReframeTriggerCount;
-    #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeTriggerCount
+    int NDPluginReframeBufferFrames;
+    int NDPluginReframeBufferSamples;
+    #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeBufferSamples
 
 private:
     // Methods

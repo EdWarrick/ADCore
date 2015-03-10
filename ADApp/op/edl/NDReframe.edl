@@ -3,7 +3,7 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 952
+x 956
 y 231
 w 390
 h 820
@@ -99,25 +99,6 @@ displayFileName {
 noScroll
 endObjectProperties
 
-# (Textupdate)
-object TextupdateClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 145
-y 410
-w 45
-h 20
-controlPv "$(P)$(R)PRECOUNT_RBV"
-fgColor index 16
-fgAlarm
-bgColor index 10
-fill
-font "arial-bold-r-12.0"
-fontAlign "center"
-endObjectProperties
-
 # (Textentry)
 object TextentryClass
 beginObjectProperties
@@ -172,25 +153,6 @@ useDisplayBg
 value {
   "Post-count #"
 }
-endObjectProperties
-
-# (Textupdate)
-object TextupdateClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 145
-y 435
-w 45
-h 20
-controlPv "$(P)$(R)POSTCOUNT_RBV"
-fgColor index 16
-fgAlarm
-bgColor index 10
-fill
-font "arial-bold-r-12.0"
-fontAlign "center"
 endObjectProperties
 
 # (Textentry)
@@ -390,7 +352,7 @@ x 325
 y 410
 w 45
 h 20
-controlPv "$(P)$(R)CurrentQty_RBV"
+controlPv "$(P)$(R)BufferFrames"
 fgColor index 16
 fgAlarm
 bgColor index 10
@@ -414,7 +376,7 @@ fgColor index 14
 bgColor index 3
 useDisplayBg
 value {
-  "Ring-buffer size"
+  "Buffered frames"
 }
 endObjectProperties
 
@@ -428,7 +390,7 @@ x 325
 y 435
 w 45
 h 20
-controlPv "$(P)$(R)PostTriggerQty_RBV"
+controlPv "$(P)$(R)BufferSamples"
 fgColor index 16
 fgAlarm
 bgColor index 10
@@ -452,7 +414,7 @@ fgColor index 14
 bgColor index 3
 useDisplayBg
 value {
-  "Post-trigger count"
+  "Buffered samples"
 }
 endObjectProperties
 

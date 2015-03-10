@@ -135,4 +135,16 @@ record(longin, "$(P)$(R)TriggerCount_RBV") {
   field(SCAN, "I/O Intr")
 }
 
+record(longin, "$(P)$(R)BufferFrames") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_BUFFER_FRAMES")
+  field(SCAN, "I/O Intr")
+}
+
+record(longin, "$(P)$(R)BufferSamples") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_BUFFER_SAMPLES")
+  field(SCAN, "I/O Intr")
+}
+
 
