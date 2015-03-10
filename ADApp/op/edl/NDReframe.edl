@@ -3,8 +3,8 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 550
-y 145
+x 952
+y 231
 w 390
 h 820
 font "arial-bold-r-12.0"
@@ -48,7 +48,7 @@ release 0
 x 5
 y 400
 w 380
-h 130
+h 255
 lineColor index 14
 fill
 fillColor index 3
@@ -218,7 +218,7 @@ major 4
 minor 1
 release 1
 x 10
-y 480
+y 595
 w 95
 h 20
 font "arial-bold-r-12.0"
@@ -237,7 +237,7 @@ major 4
 minor 1
 release 0
 x 265
-y 480
+y 595
 w 45
 h 20
 fgColor index 19
@@ -261,7 +261,7 @@ major 4
 minor 0
 release 0
 x 110
-y 480
+y 595
 w 18
 h 18
 controlPv "$(P)$(R)Capture_RBV"
@@ -279,7 +279,7 @@ major 4
 minor 1
 release 0
 x 265
-y 505
+y 620
 w 45
 h 20
 fgColor index 21
@@ -303,7 +303,7 @@ major 4
 minor 6
 release 0
 x 10
-y 505
+y 620
 w 245
 h 20
 controlPv "$(P)$(R)StatusMessage"
@@ -326,7 +326,7 @@ major 4
 minor 1
 release 0
 x 320
-y 480
+y 595
 w 55
 h 45
 fgColor index 19
@@ -350,7 +350,7 @@ major 4
 minor 1
 release 1
 x 140
-y 480
+y 595
 w 85
 h 20
 font "arial-bold-r-12.0"
@@ -369,7 +369,7 @@ major 4
 minor 0
 release 0
 x 235
-y 480
+y 595
 w 18
 h 18
 controlPv "$(P)$(R)Trigger_RBV"
@@ -453,6 +453,303 @@ bgColor index 3
 useDisplayBg
 value {
   "Post-trigger count"
+}
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 465
+w 96
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Trigger Channel"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 115
+y 460
+w 75
+h 25
+controlPv "$(P)$(R)TriggerChannel"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 490
+w 81
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "On Condition"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 95
+y 485
+w 80
+h 25
+controlPv "$(P)$(R)TriggerOnCond"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 30
+y 515
+w 61
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Threshold"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 95
+y 510
+w 80
+h 25
+controlPv "$(P)$(R)TriggerOnThresh"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 215
+y 490
+w 81
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Off Condition"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 300
+y 485
+w 80
+h 25
+controlPv "$(P)$(R)TriggerOffCond"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 235
+y 515
+w 61
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Threshold"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 300
+y 510
+w 80
+h 25
+controlPv "$(P)$(R)TriggerOffThresh"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 10
+y 555
+w 82
+h 13
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Trigger Count"
+}
+autoSize
+endObjectProperties
+
+# (Textentry)
+object TextentryClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 95
+y 550
+w 80
+h 25
+controlPv "$(P)$(R)TriggerCount"
+fgColor index 25
+fgAlarm
+bgColor index 3
+fill
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Textupdate)
+object TextupdateClass
+beginObjectProperties
+major 10
+minor 0
+release 0
+x 195
+y 555
+w 45
+h 20
+controlPv "$(P)$(R)TriggerCount_RBV"
+fgColor index 16
+fgAlarm
+bgColor index 10
+fill
+font "arial-bold-r-12.0"
+fontAlign "center"
+endObjectProperties
+
+# (Related Display)
+object relatedDisplayClass
+beginObjectProperties
+major 4
+minor 4
+release 0
+x 200
+y 790
+w 185
+h 25
+fgColor index 43
+bgColor index 3
+topShadowColor index 1
+botShadowColor index 11
+font "arial-bold-r-12.0"
+xPosOffset 200
+yPosOffset -200
+buttonLabel "Advanced..."
+numPvs 4
+numDsps 1
+displayFileName {
+  0 "NDPluginDriverAdvanced.edl"
+}
+setPosition {
+  0 "button"
+}
+endObjectProperties
+
+# (Shell Command)
+object shellCmdClass
+beginObjectProperties
+major 4
+minor 3
+release 0
+x 5
+y 790
+w 185
+h 25
+fgColor index 14
+bgColor index 3
+topShadowColor index 1
+botShadowColor index 11
+font "arial-bold-r-12.0"
+buttonLabel "HTML Documentation"
+numCmds 1
+command {
+  0 "firefox file://$(which ADBase.edl | sed \"s|data/ADBase.edl|documentation/NDPluginReframe.html|\") &"
 }
 endObjectProperties
 

@@ -39,7 +39,6 @@ static const char *driverName="NDPluginReframe";
  */
 int NDPluginReframe::containsTriggerStart()
 {
-  // ###TODO: Implement
   int startCondition, nChannels, nSamples, triggerChannel, triggerFound = 0;
   double threshold, *buffer;
   NDArray *newestArray;
@@ -71,7 +70,7 @@ int NDPluginReframe::containsTriggerStart()
 
   for (int sample = 0; sample < nSamples; sample++) {
       // Trigger channel value is sample no. * no. channels + trigger channel
-      double triggerVal = sample * nChannels + triggerChannel;
+      double triggerVal = buffer[sample * nChannels + triggerChannel];
       // For each trigger element,
   //   If <element.triggerchannel meets condition>
       if (startCondition) { // Trigger on high level
@@ -128,27 +127,27 @@ int NDPluginReframe::containsTriggerEnd()
   // Get pointer to array data.
   buffer = (double *)newestArray->pData;
 
-  for (int sample = 0; sample < nSamples; sample++) {
+  for (int sample = arrayIndex; sample < nSamples; sample++) {
       // Trigger channel value is sample no. * no. channels + trigger channel
-      double triggerVal = sample * nChannels + triggerChannel;
+      double triggerVal = buffer[sample * nChannels + triggerChannel];
       // For each trigger element,
   //   If <element.triggerchannel meets condition>
       if (endCondition) { // Trigger on high level
           if (triggerVal > threshold) {
-              triggerStartOffset_ = arrayOffset + sample;
+              triggerEndOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
           }
       } else { // Trigger on low level
           if (triggerVal < threshold) {
-              triggerStartOffset_ = arrayOffset + sample;
+              triggerEndOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
           }
       }
   }
 
-  return 0;
+  return triggerFound;
 }
 
 // Not all three counts must be calculated since none can be assumed to be a fixed size. In particular a bad frame may arrive at any point
@@ -206,7 +205,8 @@ NDArray *NDPluginReframe::constructOutput()
   outputCounts = preTriggerCounts + triggerCounts + postTriggerCounts;
 
   // Allocate buffer of (output size * # channels), correct data type.
-  targetBuffer = new double[outputCounts];
+  nChannels = arrayBuffer_->front()->dims[0].size;
+  targetBuffer = (double *)malloc(outputCounts*nChannels*sizeof(double));
 
   // Offset is (gateStart - pre-trigger counts).
   sourceOffset = triggerStartOffset_ - preTriggerCounts;
@@ -214,17 +214,19 @@ NDArray *NDPluginReframe::constructOutput()
   targetOffset = 0;
 
   // Iterate over the arrays from oldest to newest.
-  // ###TODO: Need to either use a different loop condition, or pop the queue elements as we use them.
   std::deque<NDArray *>::iterator iter;
 
   // While not at end
   for (iter = arrayBuffer_->begin(); iter != arrayBuffer_->end(); iter++) {
       sourceArray = *iter;
       sourceBuffer = (double *)sourceArray->pData;
-      nChannels = sourceArray->dims[1].size;
-      nSamples = sourceArray->dims[0].size;
+      nChannels = sourceArray->dims[0].size;
+      nSamples = sourceArray->dims[1].size;
   // For each array:
   //   copy from offset to min((array size - offset), (output size - buffer offset)) to target buffer.
+      // If room in target buffer, copy NDArray from start offset to end. Otherwise, copy as much of NDArray as will fit.
+      // The min here is intended to handle the edge cases at the start and end correctly.
+      // ###TODO: What if start and end are in the same frame?
       int counts = MIN(nSamples - sourceOffset, outputCounts - targetOffset);
       memcpy(targetBuffer + targetOffset * nChannels, sourceBuffer + sourceOffset * nChannels, counts * nChannels * sizeof(double));
   //   Increment buffer offset by # of written bytes.
@@ -235,14 +237,16 @@ NDArray *NDPluginReframe::constructOutput()
   }
 
   // Handle the carry data left at the end of the last array in the buffer.
-  // This is important since a use-case for this plugin is set to trigger immediately and rearm indefinitely, to effectively change the time base for
+  // This is important since a use-case for this plugin is to trigger immediately and rearm indefinitely, to effectively change the time base for
   // readout (e.g. concatenate arrays from a source which reads out at 1Hz and rebroadcast them as a single array at 0.1Hz). So it is important we do
   // not simply discard the carry data.
 
   if (sourceBuffer && carryCounts) {
-      carryBuffer = (double *)malloc(carryCounts*sizeof(double));
+      carryBuffer = (double *)malloc(carryCounts * nChannels * sizeof(double));
       // Copy the data from the last NDArray, starting from
-      memcpy(sourceBuffer + (nSamples - carryCounts) * nChannels, carryBuffer, carryCounts * nChannels * sizeof(double));
+
+      memcpy(carryBuffer, sourceBuffer+ (nSamples - carryCounts) * nChannels, carryCounts * nChannels * sizeof(double));
+
       //    NDArray*     alloc     (int ndims, size_t *dims, NDDataType_t dataType, size_t dataSize, void *pData);
       // NDArrayPool copies the dims array in alloc, so OK to allocate this on the stack.
       size_t dims[2] = { nChannels, carryCounts };
@@ -363,7 +367,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
             arrayBuffer_->push_back(pArrayCpy);
 
             // This loop is here because we might be using input frames that are larger than our output frames (i.e. chopping up a large NDArray into
-            // several larger chunks). In this case we might need to output several NDArrays for a single call of processCallbacks, so we need
+            // several smaller chunks). In this case we might need to output several NDArrays for a single call of processCallbacks, so we need
             // to reprocess in order to search for new triggers.
             bool retrigger = true;
             while (retrigger) { // some bytes not checked for triggers
@@ -393,10 +397,13 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
                 // Will only be 1 trigger off or end of post trigger per frame, so an if is fine here.
                 if (mode_ == Gating) {
                     // Check for trigger off
+                    // ###TODO: This will always switch to acquiring whether or not we hit a trigger.
                     int triggerEnded = containsTriggerEnd();
                     setIntegerParam(NDPluginReframeTriggerEnded, triggerEnded);
-                    mode_ = Acquiring;
-                    printf("Trigger ended\n");
+                    if (triggerEnded) {
+                        mode_ = Acquiring;
+                        printf("Trigger ended\n");
+                    }
                 }
 
                 if (mode_ == Acquiring) {

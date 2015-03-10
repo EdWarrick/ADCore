@@ -44,12 +44,6 @@ record(longout, "$(P)$(R)PRECOUNT") {
   field(PINI, "1")
 }
 
-# # Number of pre-count frames readback from driver
-#record(longin, "$(P)$(R)PRECOUNT_RBV") {
-#  field(SCAN, "I/O Intr")
-#  field(DTYP, "asynInt32")
-#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_PRE_TRIGGER")
-#}
 
 # # Number of post-count frames
 record(longout, "$(P)$(R)POSTCOUNT") {
@@ -59,26 +53,6 @@ record(longout, "$(P)$(R)POSTCOUNT") {
   field(PINI, "1")
 }
 
-# # Number of post-count frames readback from driver
-#record(longin, "$(P)$(R)POSTCOUNT_RBV") {
-#  field(SCAN, "I/O Intr")
-#  field(DTYP, "asynInt32")
-#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_POST_TRIGGER")
-#}
-
-# # Size of pre count buffer
-#record(longin, "$(P)$(R)CurrentQty_RBV") {
-#  field(SCAN, "I/O Intr")
-#  field(DTYP, "asynInt32")
-#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_CURRENT_IMAGE")
-#}
-
-# # Size of post trigger frames made available
-#record(longin, "$(P)$(R)PostTriggerQty_RBV") {
-#  field(SCAN, "I/O Intr")
-#  field(DTYP, "asynInt32")
-#  field(INP, "@asyn($(PORT) 0)CIRCULAR_BUFF_POST_COUNT")
-#}
 
 # # Force a soft trigger
 record(busy, "$(P)$(R)Trigger") {
@@ -101,4 +75,64 @@ record(bi, "$(P)$(R)Trigger_RBV") {
   field(ONAM, "Triggered")
   field(OSV,  "MINOR")
 }
+
+record(longout, "$(P)$(R)TriggerChannel") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_TRIGGER_CHAN")
+  field(VAL, "1")
+  field(PINI, "1")
+}
+
+record(longout, "$(P)$(R)TriggerChannel") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_TRIGGER_CHAN")
+  field(VAL, "1")
+  field(PINI, "1")
+}
+
+record(bo, "$(P)$(R)TriggerOnCond") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_START_COND")
+  field(ZNAM, "On Low")
+  field(ONAM, "On High")
+  field(VAL, "1")
+  field(PINI, "1")
+}
+
+record(ao, "$(P)$(R)TriggerOnThresh") {
+  field(DTYP, "asynFloat64")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_START_THRESH")
+  field(VAL, "1.0")
+  field(PINI, "1")
+}
+
+record(bo, "$(P)$(R)TriggerOffCond") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_END_COND")
+  field(ZNAM, "On Low")
+  field(ONAM, "On High")
+  field(VAL, "0")
+  field(PINI, "1")
+}
+
+record(ao, "$(P)$(R)TriggerOffThresh") {
+  field(DTYP, "asynFloat64")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_END_THRESH")
+  field(VAL, "0.0")
+  field(PINI, "1")
+}
+
+record(longout, "$(P)$(R)TriggerCount") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT) 0)REFRAME_TRIGGER_MAX")
+  field(VAL, "1")
+  field(PINI, "1")
+}
+
+record(longin, "$(P)$(R)TriggerCount_RBV") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_TRIGGER_COUNT")
+  field(SCAN, "I/O Intr")
+}
+
 
