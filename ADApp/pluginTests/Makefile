@@ -11,9 +11,14 @@ ifdef BOOSTDIR
 boost_unit_test_framework_DIR=$(BOOSTDIR)/lib
 
 PROD_IOC += NDPluginCircularBuff_test
-NDPluginCircularBuff_test_SRCS += test_NDPluginCircularBuff.cpp
+NDPluginCircularBuff_test_SRCS += test_NDPluginCircularBuff.cpp NDPluginMock.cpp
 NDPluginCircularBuff_test_LIBS += asyn ADBase NDPlugin Com simDetector
 NDPluginCircularBuff_test_LIBS += boost_unit_test_framework
+
+PROD_IOC += NDPluginReframe_test
+NDPluginReframe_test_SRCS += test_NDPluginReframe.cpp NDPluginMock.cpp
+NDPluginReframe_test_LIBS += asyn ADBase NDPlugin Com simDetector
+NDPluginReframe_test_LIBS += boost_unit_test_framework
 
 endif # BOOSTDIR
 

@@ -1,4 +1,10 @@
-/* Nothing here yet*/ 
+/*
+ * test_NDPluginCircularBuff.cpp
+ *
+ *  Created on: 23 Feb 2015
+ *      Author: Edmund Warrick
+ */
+
 #include <stdio.h>
 
 #define BOOST_TEST_DYN_LINK
@@ -9,77 +15,19 @@
 #include <NDPluginCircularBuff.h>
 #include <simDetector.h>
 #include <NDArray.h>
-#include <asynDriver.h>
 #include <asynPortClient.h>
+
+#include "NDPluginMock.h"
 
 #include <string.h>
 #include <stdint.h>
-
-#include <deque>
-using namespace std;
-
-
-
-// Mock NDPlugin; simply stores all received NDArrays and provides them to a client on request.
-class TestingPlugin : public NDPluginDriver {
-public:
-    TestingPlugin (const char *portName, int queueSize, int blockingCallbacks,
-                                  const char *NDArrayPort, int NDArrayAddr,
-                                  int maxBuffers, size_t maxMemory,
-                                  int priority, int stackSize);
-    ~TestingPlugin();
-    void processCallbacks(NDArray *pArray);
-    deque<NDArray *> *arrays();
-private:
-    deque<NDArray *> *arrays_;
-};
-
-TestingPlugin::TestingPlugin (const char *portName, int queueSize, int blockingCallbacks,
-                              const char *NDArrayPort, int NDArrayAddr,
-                              int maxBuffers, size_t maxMemory,
-                              int priority, int stackSize)
-         /* Invoke the base class constructor */
-         : NDPluginDriver(portName, queueSize, blockingCallbacks,
-                        NDArrayPort, NDArrayAddr, 1, 0, maxBuffers, maxMemory,
-                        asynInt32ArrayMask | asynFloat64ArrayMask | asynGenericPointerMask,
-                        asynInt32ArrayMask | asynFloat64ArrayMask | asynGenericPointerMask,
-                        0, 1, priority, stackSize)
-{
-    arrays_ = new deque<NDArray *>();
-
-    connectToArrayPort();
-}
-
-TestingPlugin::~TestingPlugin()
-{
-    while(arrays_->front()) {
-        arrays_->front()->release();
-        arrays_->pop_front();
-    }
-    delete arrays_;
-}
-
-std::deque<NDArray *> *TestingPlugin::arrays()
-{
-    return arrays_;
-}
-
-void TestingPlugin::processCallbacks(NDArray *pArray)
-{
-    NDPluginDriver::processCallbacks(pArray);
-    NDArray *pArrayCpy = this->pNDArrayPool->copy(pArray, NULL, 1);
-    if (pArrayCpy) {
-        arrays_->push_back(pArrayCpy);
-    }
-}
-
 
 struct PluginFixture
 {
     NDArrayPool *arrayPool;
     simDetector *driver;
     NDPluginCircularBuff *cb;
-    TestingPlugin *ds;
+    NDPluginMock *ds;
     asynInt32Client *enableCallbacks;
     asynInt32Client *blockingCallbacks;
     asynInt32Client *cbControl;
@@ -111,7 +59,7 @@ struct PluginFixture
 
         // This is the mock downstream plugin
         sprintf(dsport, "dsPort%d", testCase);
-        ds = new TestingPlugin(dsport, 16, 1, testport, 0, 50, -1, 0, 2000000);
+        ds = new NDPluginMock(dsport, 16, 1, testport, 0, 50, -1, 0, 2000000);
 
         enableCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverEnableCallbacksString);
         blockingCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverBlockingCallbacksString);
@@ -129,8 +77,6 @@ struct PluginFixture
         // with the downstream plugin.
         enableCallbacks->write(1);
         blockingCallbacks->write(1);
-
-
 
         testCase++;
 
