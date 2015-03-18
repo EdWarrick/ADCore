@@ -30,6 +30,7 @@ struct PluginFixture
     // Mock downstream params
     asynInt32Client *enableCallbacks;
     asynInt32Client *blockingCallbacks;
+    asynInt32Client *dsCounter;
 
     // Reframe params
     asynInt32Client *control;
@@ -47,10 +48,12 @@ struct PluginFixture
     asynInt32Client *counter;
 
     static int testCase;
+    vector<NDArray *> *arrays;
 
     PluginFixture()
     {
         arrayPool = new NDArrayPool(100, 0);
+        arrays = new vector<NDArray *>;
 
         // Asyn manager doesn't like it if we try to reuse the same port name for multiple drivers (even if only one is ever instantiated at once), so
         // change it slightly for each test case.
@@ -70,6 +73,7 @@ struct PluginFixture
 
         enableCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverEnableCallbacksString);
         blockingCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverBlockingCallbacksString);
+        dsCounter = new asynInt32Client(dsport, 0, NDArrayCounterString);
 
         enableCallbacks->write(1);
         blockingCallbacks->write(1);
@@ -104,11 +108,17 @@ struct PluginFixture
         delete preTrigger;
         delete control;
         delete counter;
+        delete dsCounter;
         delete blockingCallbacks;
         delete enableCallbacks;
         delete ds;
         delete rf;
         delete driver;
+
+        for (vector<NDArray *>::iterator iter = arrays->begin(); iter != arrays->end(); ++iter)
+            (*iter)->release();
+
+        delete arrays;
         delete arrayPool;
     }
     void rfProcess(NDArray *pArray)
@@ -117,11 +127,32 @@ struct PluginFixture
         rf->processCallbacks(pArray);
         rf->unlock();
     }
+    // Convenience methods to create arrays, fill them with data, and handle memory management
+    NDArray *arrayAlloc(int ndims, size_t *dims, NDDataType_t dataType, size_t dataSize, void *pData)
+    {
+        NDArray *array = arrayPool->alloc(ndims, dims, dataType, dataSize, pData);
+        arrays->push_back(array);
+        return array;
+    }
+    NDArray *constantArray(int ndims, size_t *dims, double val)
+    {
+        NDArray *array = arrayAlloc(ndims, dims, NDFloat64, 0, NULL);
+        double *pData = (double *)array->pData;
+        for (size_t i = 0; i < dims[0] * dims[1]; i++) {
+            pData[i] = val;
+        }
+        return array;
+    }
+    NDArray *emptyArray(int ndims, size_t *dims)
+    {
+        return constantArray(ndims, dims, 0.0);
+    }
+
 };
 
 int PluginFixture::testCase = 0;
 
-BOOST_FIXTURE_TEST_SUITE(ReframeTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeBufferingTests, PluginFixture)
 
 // Verify that plugin starts off in idle mode and ignores frames sent to it (doesn't check them for triggers or add them to the buffer).
 BOOST_AUTO_TEST_CASE(test_IdleModeIgnoresFrames)
@@ -291,6 +322,137 @@ BOOST_AUTO_TEST_CASE(test_BufferWrappingWorks)
     BOOST_REQUIRE_EQUAL(samples, 115);
 
     array->release();
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(ReframeTriggeringTests, PluginFixture)
+
+BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
+{
+    control->write(1);
+    preTrigger->write(5);
+    postTrigger->write(5);
+    onCond->write(1);
+    onThresh->write(3.0);
+    offCond->write(1);
+    offThresh->write(-1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = emptyArray(2, dims);
+    double *pData = (double *)testArray->pData;
+    *(pData+9) = 4.0;
+
+    rfProcess(testArray);
+
+    int dscount, trigs;
+
+    dsCounter->read(&dscount);
+    triggerCount->read(&trigs);
+
+    BOOST_REQUIRE(dscount == 1);
+    BOOST_REQUIRE(trigs == 1);
+
+    // Now test that equal to trigger is ignored (i.e. use >, not >=)
+
+    control->write(1);
+
+    *(pData+9) = 3.0;
+
+    rfProcess(testArray);
+
+    dsCounter->read(&dscount);
+    triggerCount->read(&trigs);
+
+    BOOST_REQUIRE(dscount == 1);
+    BOOST_REQUIRE(trigs == 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
+{
+    control->write(1);
+    preTrigger->write(5);
+    postTrigger->write(5);
+    onCond->write(0);
+    onThresh->write(1.0);
+    offCond->write(1);
+    offThresh->write(-1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = constantArray(2, dims, 1.0);
+    double *pData = (double *)testArray->pData;
+    *(pData+9) = 0.0;
+
+    rfProcess(testArray);
+
+    int dscount, samples, trigs;
+
+    dsCounter->read(&dscount);
+    triggerCount->read(&trigs);
+
+    BOOST_REQUIRE(dscount == 1);
+    BOOST_REQUIRE(trigs == 1);
+
+    // Now test that equal to trigger is ignored (i.e. use <, not <=)
+
+    control->write(1);
+
+    *(pData+9) = 1.0;
+
+    rfProcess(testArray);
+
+    dsCounter->read(&dscount);
+    triggerCount->read(&trigs);
+
+    BOOST_REQUIRE(dscount == 1);
+    BOOST_REQUIRE(trigs == 0);
+
+}
+
+BOOST_AUTO_TEST_CASE(test_SoftTrigger)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_GatingTriggerHigh)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_GatingTriggerLow)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_MultiTrigger)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
+{
+
+
+}
+
+BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_IgnoresNonTriggerChannel)
+{
+
 }
 
 BOOST_AUTO_TEST_SUITE_END()

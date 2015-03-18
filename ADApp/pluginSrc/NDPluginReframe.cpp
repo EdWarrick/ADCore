@@ -108,7 +108,7 @@ int NDPluginReframe::containsTriggerEnd()
   // Get end condition and threshold
   getIntegerParam(NDPluginReframeTriggerEndCondition, &endCondition);
   getIntegerParam(NDPluginReframeTriggerChannel, &triggerChannel);
-  getDoubleParam(NDPluginReframeTriggerStartThreshold, &threshold);
+  getDoubleParam(NDPluginReframeTriggerEndThreshold, &threshold);
   // Get current array from buffer.
   newestArray = arrayBuffer_->back();
   dims = newestArray->dims;
@@ -592,7 +592,7 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
 
     // Set to concatenate on dimension 1 (though no enforcement to use 2d arrays yet).
     setIntegerParam(NDPluginReframeTriggerDimension, 1);
-    setIntegerParam(NDPluginReframeTriggerChannel, 1);
+    setIntegerParam(NDPluginReframeTriggerChannel, 0);
 
     setIntegerParam(NDPluginReframePreTriggerSamples, 100);
     setIntegerParam(NDPluginReframePostTriggerSamples, 100);
