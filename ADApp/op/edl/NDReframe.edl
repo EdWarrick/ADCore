@@ -3,7 +3,7 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 956
+x 958
 y 231
 w 390
 h 820
@@ -476,24 +476,6 @@ value {
 autoSize
 endObjectProperties
 
-# (Textentry)
-object TextentryClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 95
-y 485
-w 80
-h 25
-controlPv "$(P)$(R)TriggerOnCond"
-fgColor index 25
-fgAlarm
-bgColor index 3
-fill
-font "arial-bold-r-12.0"
-endObjectProperties
-
 # (Static Text)
 object activeXTextClass
 beginObjectProperties
@@ -550,24 +532,6 @@ value {
   "Off Condition"
 }
 autoSize
-endObjectProperties
-
-# (Textentry)
-object TextentryClass
-beginObjectProperties
-major 10
-minor 0
-release 0
-x 300
-y 485
-w 80
-h 25
-controlPv "$(P)$(R)TriggerOffCond"
-fgColor index 25
-fgAlarm
-bgColor index 3
-fill
-font "arial-bold-r-12.0"
 endObjectProperties
 
 # (Static Text)
@@ -713,5 +677,43 @@ numCmds 1
 command {
   0 "firefox file://$(which ADBase.edl | sed \"s|data/ADBase.edl|documentation/NDPluginReframe.html|\") &"
 }
+endObjectProperties
+
+# (Menu Button)
+object activeMenuButtonClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 95
+y 485
+w 80
+h 25
+fgColor index 25
+bgColor index 3
+inconsistentColor index 3
+topShadowColor index 1
+botShadowColor index 11
+controlPv "$(P)$(R)TriggerOnCond"
+font "arial-bold-r-12.0"
+endObjectProperties
+
+# (Menu Button)
+object activeMenuButtonClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 300
+y 485
+w 80
+h 25
+fgColor index 25
+bgColor index 3
+inconsistentColor index 3
+topShadowColor index 1
+botShadowColor index 11
+controlPv "$(P)$(R)TriggerOffCond"
+font "arial-bold-r-12.0"
 endObjectProperties
 

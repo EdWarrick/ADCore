@@ -32,6 +32,8 @@ typedef enum NDPluginReframeMode {
 #define NDPluginReframeTriggerMaxString            "REFRAME_TRIGGER_MAX"   /* (asynInt32,        r/w) Number of triggers/gates. ADC will disarm once
                                                                                                               reached. Set to 0 for continuous re-arm */
 #define NDPluginReframeTriggerCountString          "REFRAME_TRIGGER_COUNT" /* (asynInt32,        r/o) Triggers detected so far */
+#define NDPluginReframeTriggerTotalString          "REFRAME_TRIGGER_TOTAL" /* (asynInt32,        r/o) Total number of triggers output. Used to generate the
+                                                                                                              uniqueID for the output frames */
 #define NDPluginReframeTriggerEndedString          "REFRAME_TRIGGER_ENDED" /* (asynInt32,        r/o) Has end of gate been seen? Counterpart to
                                                                                                               NDPluginReframeTriggered */
 #define NDPluginReframeBufferFramesString          "REFRAME_BUFFER_FRAMES" /* (asynInt32,        r/o) Number of arrays stored in buffer */
@@ -66,6 +68,7 @@ protected:
     int NDPluginReframeTriggerMax;
     int NDPluginReframeTriggerEnded;
     int NDPluginReframeTriggerCount;
+    int NDPluginReframeTriggerTotal;
     int NDPluginReframeBufferFrames;
     int NDPluginReframeBufferSamples;
     #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeBufferSamples
