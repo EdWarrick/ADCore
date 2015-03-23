@@ -27,6 +27,21 @@ record(bi, "$(P)$(R)Capture_RBV") {
   field(OSV,  "MINOR")
 }
 
+# Mode readback
+record(mbbi, "$(P)$(R)Mode_RBV") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_MODE")
+  field(ZRST, "Idle")
+  field(ZRVL, "0")
+  field(ONST, "Armed")
+  field(ONVL, "1")
+  field(TWST, "Gating")
+  field(TWVL, "2")
+  field(THST, "Acquiring")
+  field(THVL, "3")
+  field(SCAN, "I/O Intr")
+}
+
 # # Status message
 record(stringin, "$(P)$(R)StatusMessage")
 {

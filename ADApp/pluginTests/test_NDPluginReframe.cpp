@@ -71,7 +71,7 @@ struct PluginFixture
         // This is the plugin under test
         sprintf(testport, "testPort%d", testCase);
         rf = new NDPluginReframe(testport, 50, 0, simport, 0, 1000, -1, 0, 2000000);
-
+//
         // This is the mock downstream plugin
         sprintf(dsport, "dsPort%d", testCase);
         ds = new NDPluginMock(dsport, 16, 1, testport, 0, 50, -1, 0, 2000000);
@@ -408,7 +408,7 @@ BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
 
     rfProcess(testArray);
 
-    int dscount, samples, trigs;
+    int dscount, trigs;
 
     dsCounter->read(&dscount);
     triggerCount->read(&trigs);
@@ -578,12 +578,14 @@ BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
 {
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
+    BOOST_REQUIRE(false);
 }
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
 {
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
+    BOOST_REQUIRE(false);
 }
 
 BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
@@ -797,37 +799,424 @@ BOOST_AUTO_TEST_CASE(test_DataOrderPreserved)
 
 BOOST_AUTO_TEST_CASE(test_ZeroPreTrigger)
 {
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(5);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(25.0);
+    offThresh->write(25.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {2, 20};
+    NDArray *testArray = incrementArray(2, dims, 0);
+
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 5);
+
+    double *pData = (double *)opArray->pData;
+
+    BOOST_CHECK(fabs(pData[0] - 30.0) < 0.1);
 }
 
 BOOST_AUTO_TEST_CASE(test_ZeroPostTrigger)
 {
+    control->write(1);
+    preTrigger->write(6);
+    postTrigger->write(0);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(75.0);
+    offThresh->write(75.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {3, 30};
+    NDArray *testArray = incrementArray(2, dims, 0);
+
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 6);
+
+    double *pData = (double *)opArray->pData;
+
+    BOOST_CHECK(fabs(pData[3*5] - 70.0) < 0.1);
 
 }
 
 BOOST_AUTO_TEST_CASE(test_ZeroPreAndPost)
 {
+    BOOST_REQUIRE(false);
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(0);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(75.0);
+    offThresh->write(75.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {3, 30};
+    NDArray *testArray = incrementArray(2, dims, 0);
+
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+    int trigs;
+    triggerCount->read(&trigs);
+
+    BOOST_CHECK_EQUAL(arrays->size(), 0);
+    BOOST_CHECK_EQUAL(trigs, 1);
 }
 
 BOOST_AUTO_TEST_CASE(test_PreTriggerOnBufferStart)
 {
+    control->write(1);
+    preTrigger->write(10);
+    postTrigger->write(5);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(1900.0);
+    offThresh->write(1900.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {1, 5};
+    NDArray *testArray1 = incrementArray(2, dims, 0);
+    NDArray *testArray2 = incrementArray(2, dims, 1000);
+    NDArray *testArray3 = incrementArray(2, dims, 2000);
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+    rfProcess(testArray3);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 15);
+
+    double *pData = (double *)opArray->pData;
+
+    BOOST_CHECK(fabs(pData[0] - 0.0) < 0.1);
+    BOOST_CHECK(fabs(pData[14] - 2040.0) < 0.1);
 }
 
 BOOST_AUTO_TEST_CASE(test_WindowAlignedWithFrameBoundary)
 {
+    control->write(1);
+    preTrigger->write(5);
+    postTrigger->write(8);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(1900.0);
+    offThresh->write(2010.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {1, 5};
+    NDArray *testArray1 = incrementArray(2, dims, 0);
+    NDArray *testArray2 = incrementArray(2, dims, 1000);
+    NDArray *testArray3 = incrementArray(2, dims, 2000);
+    NDArray *testArray4 = incrementArray(2, dims, 3000);
+    NDArray *testArray5 = incrementArray(2, dims, 4000);
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+    rfProcess(testArray3);
+    rfProcess(testArray4);
+    rfProcess(testArray5);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 15);
+
+    double *pData = (double *)opArray->pData;
+
+    BOOST_CHECK(fabs(pData[0] - 1000.0) < 0.1);
+    BOOST_CHECK(fabs(pData[14] - 3040.0) < 0.1);
 }
 
 BOOST_AUTO_TEST_CASE(test_PreTriggerTruncation)
 {
+    control->write(1);
+    preTrigger->write(50);
+    postTrigger->write(2);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(5.0);
+    offThresh->write(5.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {3, 10};
+    NDArray *testArray1 = incrementArray(2, dims, 0);
+
+    rfProcess(testArray1);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_CHECK_EQUAL(opArray->dims[1].size, 3);
 }
 
 BOOST_AUTO_TEST_CASE(test_HandlesVariableSampleSizes)
 {
+    control->write(1);
+    preTrigger->write(10);
+    postTrigger->write(10);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(3015.0);
+    offThresh->write(3025.0);
+    triggerMax->write(1.0);
 
+    size_t dims[2] = {1, 5};
+    NDArray *testArray1 = incrementArray(2, dims, 0);
+    dims[1] = 30;
+    NDArray *testArray2 = incrementArray(2, dims, 1000);
+    dims[1] = 1;
+    NDArray *testArray3 = incrementArray(2, dims, 2000);
+    dims[1] = 7;
+    NDArray *testArray4 = incrementArray(2, dims, 3000);
+    dims[1] = 60;
+    NDArray *testArray5 = incrementArray(2, dims, 4000);
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+    rfProcess(testArray3);
+    rfProcess(testArray4);
+    rfProcess(testArray5);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+
+    NDArray *opArray = arrays->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 21);
+
+    double *pData = (double *)opArray->pData;
+
+    BOOST_CHECK(fabs(pData[0] - 1230.0) < 0.1);
+    BOOST_CHECK(fabs(pData[20] - 4050.0) < 0.1);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(ReframeCarryTests, PluginFixture)
+
+BOOST_AUTO_TEST_CASE(test_CarryBufferCorrect)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(1);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(0.0);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[2] = 101.0;
+
+    rfProcess(testArray);
+    pData[2] = 20.0;
+    pData[0] = 101.0;
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrays->size(), 2);
+
+    NDArray *opArray = arrays->back();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 3);
+
+    double *pOutData = (double *)opArray->pData;
+    BOOST_CHECK(fabs(pOutData[0]-30.0)<0.1);
+}
+
+BOOST_AUTO_TEST_CASE(test_HandlesMissingCarryBuffer)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[3] = 101.0;
+
+    int frames;
+    storedFrames->read(&frames);
+    BOOST_CHECK_EQUAL(frames, 0);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(ReframeAttributeTests, PluginFixture)
+
+BOOST_AUTO_TEST_CASE(test_AttributesFromFirstArray)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_AttributesFromCarryArray)
+{
+
+}
+
+BOOST_AUTO_TEST_CASE(test_TimestampCorrect)
+{
+
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(ReframeErrorTests, PluginFixture)
+
+BOOST_AUTO_TEST_CASE(test_WrongNDims)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[3] = 101.0;
+
+    size_t badDims[3] = {2,3,4};
+    NDArray *badArray = arrayPool->alloc(3, badDims, NDFloat64, 0, NULL);
+
+    rfProcess(testArray);
+    rfProcess(badArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    NDArray *opArray = arrays->back();
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
+    int frames;
+    storedFrames->read(&frames);
+    BOOST_CHECK_EQUAL(frames, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_InconsistentChannelNum)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[3] = 101.0;
+
+    size_t badDims[2] = {2, 5};
+    NDArray *badArray = arrayPool->alloc(2, badDims, NDFloat64, 0, NULL);
+
+    rfProcess(testArray);
+    rfProcess(badArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    NDArray *opArray = arrays->back();
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
+    int frames;
+    storedFrames->read(&frames);
+    BOOST_CHECK_EQUAL(frames, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_NoTriggerChannel)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+    triggerChannel->write(5);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[3] = 101.0;
+
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrays->size(), 0);
+    int frames;
+    storedFrames->read(&frames);
+    BOOST_CHECK_EQUAL(frames, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_WrongDataType)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {1, 5};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+    pData[3] = 101.0;
+
+    NDArray *badArray = arrayPool->alloc(2, dims, NDUInt8, 0, NULL);
+
+    rfProcess(testArray);
+    rfProcess(badArray);
+
+    deque<NDArray *> *arrays = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    NDArray *opArray = arrays->back();
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
+    int frames;
+    storedFrames->read(&frames);
+    BOOST_CHECK_EQUAL(frames, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
