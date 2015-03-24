@@ -14,6 +14,7 @@
 #include <math.h>
 
 // C++ dependencies
+#include <typeinfo>
 using namespace std;
 
 // EPICS dependencies
@@ -37,10 +38,12 @@ static const char *driverName="NDPluginReframe";
  * Side effects: Sets triggerStartOffset_ to the location of the trigger condition if found.
  * \return int, set to 1 if trigger found, 0 otherwise
  */
+template <typename epicsType>
 int NDPluginReframe::containsTriggerStart()
 {
   int startCondition, nChannels, nSamples, triggerChannel, triggerFound = 0;
-  double threshold, *buffer;
+  epicsType *buffer;
+  double threshold;
   NDArray *newestArray;
   NDDimension_t *dims;
 
@@ -54,23 +57,23 @@ int NDPluginReframe::containsTriggerStart()
   // ###TODO Check whether we need to look at the other elements of dims (offset, binning, reverse).
   nChannels = dims[0].size;
   nSamples  = dims[1].size;
-  buffer = (double *)newestArray->pData;
+  buffer = (epicsType *)newestArray->pData;
 
   // Find offset into buffer of the start of this array
   int arrayOffset = bufferSizeCounts(0) - nSamples;
 
   for (int sample = 0; sample < nSamples; sample++) {
 
-      double triggerVal = buffer[sample * nChannels + triggerChannel];
+      epicsType triggerVal = buffer[sample * nChannels + triggerChannel];
 
       if (startCondition) { // Trigger on high level
-          if (triggerVal > threshold) {
+          if (triggerVal > static_cast<epicsType>(threshold)) {
               triggerStartOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
           }
       } else { // Trigger on low level
-          if (triggerVal < threshold) {
+          if (triggerVal < static_cast<epicsType>(threshold)) {
               triggerStartOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
@@ -87,10 +90,12 @@ int NDPluginReframe::containsTriggerStart()
   * Side effects: Sets triggerEndOffset_ to the offset of the end condition if found.
   * \return int, set to 1 if trigger end found, 0 otherwise.
   */
+template <typename epicsType>
 int NDPluginReframe::containsTriggerEnd()
 {
   int endCondition, arrayOffset, arrayIndex = 0, nChannels, nSamples, triggerChannel, triggerFound = 0;
-  double threshold, *buffer;
+  epicsType *buffer;
+  double threshold;
   NDArray *newestArray;
   NDDimension_t *dims;
 
@@ -113,19 +118,19 @@ int NDPluginReframe::containsTriggerEnd()
       arrayIndex = triggerStartOffset_ - arrayOffset;
   }
 
-  buffer = (double *)newestArray->pData;
+  buffer = (epicsType *)newestArray->pData;
   for (int sample = arrayIndex; sample < nSamples; sample++) {
 
-      double triggerVal = buffer[sample * nChannels + triggerChannel];
+      epicsType triggerVal = buffer[sample * nChannels + triggerChannel];
 
       if (endCondition) { // Trigger on high level
-          if (triggerVal > threshold) {
+          if (triggerVal > static_cast<epicsType>(threshold)) {
               triggerEndOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
           }
       } else { // Trigger on low level
-          if (triggerVal < threshold) {
+          if (triggerVal < static_cast<epicsType>(threshold)) {
               triggerEndOffset_ = arrayOffset + sample;
               triggerFound = 1;
               break;
@@ -145,11 +150,12 @@ int NDPluginReframe::containsTriggerEnd()
   * post trigger, or else nothing if the post trigger end aligned with the end of the last NDArray.
   * \return The single reframed NDArray for output.
   */
+template <typename epicsType>
 NDArray *NDPluginReframe::constructOutput()
 {
   int preTriggerCounts, triggerCounts, postTriggerCounts, outputCounts, nChannels, sourceOffset, targetOffset, nSamples=0, carryCounts=0;
   int preTrigger, postTrigger, arrayCount;
-  double *sourceBuffer = NULL, *targetBuffer = NULL, *carryBuffer = NULL;
+  epicsType *sourceBuffer = NULL, *targetBuffer = NULL, *carryBuffer = NULL;
   NDArray *sourceArray = NULL, *outputArray = NULL, *carryArray = NULL;
 
   getIntegerParam(NDPluginReframePreTriggerSamples, &preTrigger);
@@ -198,35 +204,47 @@ NDArray *NDPluginReframe::constructOutput()
   nChannels = firstArray->dims[0].size;
 
   size_t dims[2] = { nChannels, outputCounts };
-  outputArray = this->pNDArrayPool->alloc(2, dims, NDFloat64, 0, NULL);
-  targetBuffer = (double *)outputArray->pData;
+  if(typeid(epicsType) == typeid(epicsInt8))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDInt8, 0, NULL);
+  else if (typeid(epicsType) == typeid(epicsUInt8))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDUInt8, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsInt16))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDInt16, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsUInt16))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDUInt16, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsInt32))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDInt32, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsUInt32))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDUInt32, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsFloat32))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDFloat32, 0, NULL);
+  else if(typeid(epicsType) == typeid(epicsFloat64))
+      outputArray = this->pNDArrayPool->alloc(2, dims, NDFloat64, 0, NULL);
+  else
+      return NULL;
+
+  targetBuffer = (epicsType *)outputArray->pData;
 
   // Copy the attributes and timestamp from the first array.
   outputArray->pAttributeList->copy(firstArray->pAttributeList);
   outputArray->timeStamp = firstArray->timeStamp;
   outputArray->epicsTS = firstArray->epicsTS;
 
-  // Offset is (gateStart - pre-trigger counts).
+  // Offset in source array is (gateStart - pre-trigger counts).
   sourceOffset = triggerStartOffset_ - preTriggerCounts;
-  // buffer offset is 0.
   targetOffset = 0;
 
   // Iterate over the arrays from oldest to newest.
   std::deque<NDArray *>::iterator iter;
-
-  // While not at end
   for (iter = arrayBuffer_->begin(); iter != arrayBuffer_->end(); iter++) {
       sourceArray = *iter;
-      sourceBuffer = (double *)sourceArray->pData;
+      sourceBuffer = (epicsType *)sourceArray->pData;
       nChannels = sourceArray->dims[0].size;
       nSamples = sourceArray->dims[1].size;
-  // For each array:
-  //   copy from offset to min((array size - offset), (output size - buffer offset)) to target buffer.
       // If room in target buffer, copy NDArray from start offset to end. Otherwise, copy as much of NDArray as will fit.
       // The min here is intended to handle the edge cases at the start and end correctly.
       int counts = MIN(nSamples - sourceOffset, outputCounts - targetOffset);
-      memcpy(targetBuffer + targetOffset * nChannels, sourceBuffer + sourceOffset * nChannels, counts * nChannels * sizeof(double));
-  //   Increment buffer offset by # of written bytes.
+      memcpy(targetBuffer + targetOffset * nChannels, sourceBuffer + sourceOffset * nChannels, counts * nChannels * sizeof(epicsType));
       targetOffset += counts;
       // Compute number of counts remaining at end of buffer (to carry to next buffer).
       carryCounts = nSamples - sourceOffset - counts;
@@ -240,15 +258,30 @@ NDArray *NDPluginReframe::constructOutput()
 
   if (sourceBuffer && carryCounts) {
       size_t carryDims[2] = { nChannels, carryCounts };
-      carryArray = this->pNDArrayPool->alloc(2, carryDims, NDFloat64, 0, NULL);
+
+      if(typeid(epicsType) == typeid(epicsInt8))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDInt8, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsUInt8))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDUInt8, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsInt16))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDInt16, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsUInt16))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDUInt16, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsInt32))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDInt32, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsUInt32))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDUInt32, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsFloat32))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDFloat32, 0, NULL);
+      else if(typeid(epicsType) == typeid(epicsFloat64))
+          carryArray = this->pNDArrayPool->alloc(2, carryDims, NDFloat64, 0, NULL);
 
       carryArray->pAttributeList->copy(sourceArray->pAttributeList);
       carryArray->timeStamp = sourceArray->timeStamp;
       carryArray->epicsTS = sourceArray->epicsTS;
 
-      carryBuffer = (double *)carryArray->pData;
-      // Copy the data from the last NDArray, starting from the last sample written to the output + 1.
-      memcpy(carryBuffer, sourceBuffer+ (nSamples - carryCounts) * nChannels, carryCounts * nChannels * sizeof(double));
+      carryBuffer = (epicsType *)carryArray->pData;
+      memcpy(carryBuffer, sourceBuffer+ (nSamples - carryCounts) * nChannels, carryCounts * nChannels * sizeof(epicsType));
   }
 
   // Now tear down the original buffer
@@ -286,14 +319,11 @@ NDArray *NDPluginReframe::constructOutput()
   */
 int NDPluginReframe::bufferSizeCounts(int start)
 {
-    // Initialise count to 0.
     int count = 0, index = 0;
-    // Get buffer iterator.
     std::deque<NDArray *>::iterator iter;
 
-    // While not at end
+    // Skip arrays until we reach start, then sum the array sizes from then until the end of the buffer
     for (iter = arrayBuffer_->begin(); iter != arrayBuffer_->end(); iter++, index++) {
-        // Skip arrays until we reach start
         if (index >= start) {
             count += (*iter)->dims[1].size;
         }
@@ -325,13 +355,16 @@ int NDPluginReframe::arrayIsValid(NDArray *pArray)
     if (triggerChannel < 0 || dims[0].size < (size_t)triggerChannel)
         return 0;
 
-    if(pArray->dataType != NDFloat64)
-        return 0;
-
     // Check the number of channels is consistent
     if (arrayBuffer_->size()) {
         expectedDims = arrayBuffer_->front()->dims;
         if (expectedDims[0].size != dims[0].size)
+            return 0;
+    }
+
+    // Check the data type hasn't changed
+    if (arrayBuffer_->size()) {
+        if (arrayBuffer_->front()->dataType != pArray->dataType)
             return 0;
     }
 
@@ -355,9 +388,96 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
     if (mode != Idle) {
         // ###TODO: Handling of array cap - we need to leave 2 arrays available to construct the output array and carry array.
         NDArray *pArrayCpy = this->pNDArrayPool->copy(pArray, NULL, 1);
+        handleNewArray(pArrayCpy);
+    }
 
-        // Check if array is valid and if so add it to the buffer.
-        if (pArrayCpy && arrayIsValid(pArrayCpy)) {
+    callParamCallbacks();
+}
+
+void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
+{
+    if (pArrayCpy && arrayIsValid(pArrayCpy)) {
+        switch(pArrayCpy->dataType) {
+            case NDInt8:
+                handleNewArrayT<epicsInt8>(pArrayCpy);
+                break;
+            case NDUInt8:
+                handleNewArrayT<epicsUInt8>(pArrayCpy);
+                break;
+            case NDInt16:
+                handleNewArrayT<epicsInt16>(pArrayCpy);
+                break;
+            case NDUInt16:
+                handleNewArrayT<epicsUInt16>(pArrayCpy);
+                break;
+            case NDInt32:
+                handleNewArrayT<epicsInt32>(pArrayCpy);
+                break;
+            case NDUInt32:
+                handleNewArrayT<epicsUInt32>(pArrayCpy);
+                break;
+            case NDFloat32:
+                handleNewArrayT<epicsFloat32>(pArrayCpy);
+                break;
+            case NDFloat64:
+                handleNewArrayT<epicsFloat64>(pArrayCpy);
+                break;
+            default:
+                printf("Data type %i not supported\n", pArrayCpy->dataType);
+                break;
+        }
+    } else {
+        // either we couldn't copy the array or it failed to validate, so output any triggered data already buffered and reset.
+        if(arrayBuffer_->size()) {
+            NDArray *outputArray = NULL;
+            switch(arrayBuffer_->front()->dataType) {
+                case NDInt8:
+                    outputArray = constructOutput<epicsInt8>();
+                    break;
+                case NDUInt8:
+                    outputArray = constructOutput<epicsUInt8>();
+                    break;
+                case NDInt16:
+                    outputArray = constructOutput<epicsInt16>();
+                    break;
+                case NDUInt16:
+                    outputArray = constructOutput<epicsUInt16>();
+                    break;
+                case NDInt32:
+                    outputArray = constructOutput<epicsInt32>();
+                    break;
+                case NDUInt32:
+                    outputArray = constructOutput<epicsUInt32>();
+                    break;
+                case NDFloat32:
+                    outputArray = constructOutput<epicsFloat32>();
+                    break;
+                case NDFloat64:
+                    outputArray = constructOutput<epicsFloat64>();
+                    break;
+
+            }
+
+            if (outputArray) {
+                this->unlock();
+                doCallbacksGenericPointer(outputArray, NDArrayData, 0);
+                this->lock();
+                outputArray->release();
+            }
+        }
+
+        triggerStartOffset_ = 0;
+        triggerEndOffset_ = 0;
+        setIntegerParam(NDPluginReframeTriggerEnded, 0);
+        setIntegerParam(NDPluginReframeMode, Idle);
+    }
+}
+
+template <typename epicsType>
+void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
+{
+    int mode;
+    getIntegerParam(NDPluginReframeMode, &mode);
 
             arrayBuffer_->push_back(pArrayCpy);
 
@@ -369,7 +489,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
                 if (mode == Armed) {
 
                     // First test for trigger based on the data
-                    int triggered = containsTriggerStart();
+                    int triggered = containsTriggerStart<epicsType>();
 
                     // Next check for soft trigger
                     if (!triggered) {
@@ -386,6 +506,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
                     // the trigger start is received the pre-trigger is fixed).
                     // We will have the problem that the current test assumes the trigger frame
                     // ###TODO: These two branches could be folded into one.
+                    // ###TODO: This should work fine even if pre-trigger is zero, but I should probably update the variable names to indicate this.
                     if (!triggered) {
                         int preCounts;
                         getIntegerParam(NDPluginReframePreTriggerSamples, &preCounts);
@@ -416,7 +537,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
                                 // I think this is just the triggerStartOffset_.
                                 triggerStartOffset_ -= firstArraySize;
                             } else {
-                                // If we do need the first array, we're done.
+                                // Stop pruning once the first array does contribute to the pre-buffer
                                 break;
                             }
                         }
@@ -428,7 +549,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
 
                 if (mode == Gating) {
                     // Check data for trigger end
-                    int triggerEnded = containsTriggerEnd();
+                    int triggerEnded = containsTriggerEnd<epicsType>();
 
                     // Check for soft trigger
                     if (!triggerEnded) {
@@ -453,7 +574,7 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
 
                     // If it has reached the target size, construct the output and do callbacks on it.
                     if (currentPostSize >= postSize) {
-                        NDArray *outputArray = constructOutput();
+                        NDArray *outputArray = constructOutput<epicsType>();
                         if (outputArray) {
                             this->unlock();
                             doCallbacksGenericPointer(outputArray, NDArrayData, 0);
@@ -493,28 +614,12 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
                 } // mode acquiring
             } // while still looking for triggers
         } else {
-            // either we couldn't copy the array or it failed to validate, so output any triggered data already buffered and reset.
-            NDArray *outputArray = constructOutput();
-            if (outputArray) {
-                this->unlock();
-                doCallbacksGenericPointer(outputArray, NDArrayData, 0);
-                this->lock();
-                outputArray->release();
-            }
 
-
-            triggerStartOffset_ = 0;
-            triggerEndOffset_ = 0;
-            setIntegerParam(NDPluginReframeTriggerEnded, 0);
-            setIntegerParam(NDPluginReframeMode, Idle);
-            getIntegerParam(NDPluginReframeMode, &mode);
         }
         setIntegerParam(NDPluginReframeBufferFrames, arrayBuffer_->size());
         setIntegerParam(NDPluginReframeBufferSamples, bufferSizeCounts(0));
 
-    } // if not idle
 
-    callParamCallbacks();
 }
 
 /** Called when asyn clients call pasynInt32->write().

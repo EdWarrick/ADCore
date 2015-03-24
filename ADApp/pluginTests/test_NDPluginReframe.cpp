@@ -1210,6 +1210,7 @@ BOOST_AUTO_TEST_CASE(test_WrongDataType)
     rfProcess(testArray);
     rfProcess(badArray);
 
+    badArray->release();
     deque<NDArray *> *arrays = ds->arrays();
     BOOST_REQUIRE_EQUAL(arrays->size(), 1);
     NDArray *opArray = arrays->back();
@@ -1217,6 +1218,31 @@ BOOST_AUTO_TEST_CASE(test_WrongDataType)
     int frames;
     storedFrames->read(&frames);
     BOOST_CHECK_EQUAL(frames, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_HandlesUInt8)
+{
+    control->write(1);
+    preTrigger->write(2);
+    postTrigger->write(3);
+    onCond->write(1.0);
+    offCond->write(1.0);
+    onThresh->write(100.0);
+    offThresh->write(100.0);
+    triggerMax->write(1.0);
+
+    size_t dims[2] = {3,20};
+    NDArray *testArray = arrayPool->alloc(2, dims, NDUInt8, 0, NULL);
+    uint8_t *pData = (uint8_t *)testArray->pData;
+    pData[3*5] = 101;
+
+    rfProcess(testArray);
+    testArray->release();
+
+    deque<NDArray *> *arrays = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    NDArray *opArray = arrays->back();
+    BOOST_CHECK_EQUAL(opArray->dims[1].size, 5);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

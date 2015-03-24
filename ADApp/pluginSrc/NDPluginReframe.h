@@ -77,9 +77,11 @@ protected:
 
 private:
     // Methods
-    int containsTriggerStart();                    // Search for gate start in current buffer and return true if found. Sets gateStartOffset_.
-    int containsTriggerEnd();                      // Search for gate end in current buffer and return true if found. Sets gateEndOffset_.
-    NDArray *constructOutput();               // Create a single output NDArray from the arrays stored in preBuffer_.
+    template<typename epicsType> int containsTriggerStart();                    // Search for gate start in current buffer and return true if found. Sets gateStartOffset_.
+    template<typename epicsType> int containsTriggerEnd();                      // Search for gate end in current buffer and return true if found. Sets gateEndOffset_.
+    template<typename epicsType> NDArray *constructOutput();               // Create a single output NDArray from the arrays stored in preBuffer_.
+    void handleNewArray(NDArray *pDataCopy);
+    template<typename epicsType> void handleNewArrayT(NDArray *pDataCopy);
     int bufferSizeCounts(int start);          // Utility function; walks the NDArray buffer from the given start array to the end and returns the total size in counts.
     int arrayIsValid(NDArray *pArray);         // Checks that input arrays have the expected number of dimensions & the number of channels is consistent.
 
