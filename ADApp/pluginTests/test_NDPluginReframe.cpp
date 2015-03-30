@@ -5,8 +5,6 @@
  *      Author: Edmund Warrick
  */
 
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE "NDPluginReframe Tests"
 #include "boost/test/unit_test.hpp"
 #include "boost/test/floating_point_comparison.hpp"
 
@@ -22,7 +20,7 @@
 #include <stdint.h>
 #include <math.h>
 
-struct PluginFixture
+struct ReframeFixture
 {
     NDArrayPool *arrayPool;
     simDetector *driver;
@@ -55,7 +53,7 @@ struct PluginFixture
     static int testCase;
     vector<NDArray *> *arrays;
 
-    PluginFixture()
+    ReframeFixture()
     {
         arrayPool = new NDArrayPool(100, 0);
         arrays = new vector<NDArray *>;
@@ -103,7 +101,7 @@ struct PluginFixture
 
         testCase++;
     }
-    ~PluginFixture()
+    ~ReframeFixture()
     {
         delete offThresh;
         delete onThresh;
@@ -173,9 +171,9 @@ struct PluginFixture
 
 };
 
-int PluginFixture::testCase = 0;
+int ReframeFixture::testCase = 0;
 
-BOOST_FIXTURE_TEST_SUITE(ReframeBufferingTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeBufferingTests, ReframeFixture)
 
 // Verify that plugin starts off in idle mode and ignores frames sent to it (doesn't check them for triggers or add them to the buffer).
 BOOST_AUTO_TEST_CASE(test_IdleModeIgnoresFrames)
@@ -349,7 +347,7 @@ BOOST_AUTO_TEST_CASE(test_BufferWrappingWorks)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(ReframeTriggeringTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeTriggeringTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
 {
@@ -643,7 +641,7 @@ BOOST_AUTO_TEST_CASE(test_IgnoresNonTriggerChannel)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(ReframeReframingTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeReframingTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_WindowLTFrameSize)
 {
@@ -1022,7 +1020,7 @@ BOOST_AUTO_TEST_CASE(test_HandlesVariableSampleSizes)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(ReframeCarryTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeCarryTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_CarryBufferCorrect)
 {
@@ -1080,7 +1078,7 @@ BOOST_AUTO_TEST_CASE(test_HandlesMissingCarryBuffer)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(ReframeAttributeTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeAttributeTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_AttributesFromFirstArray)
 {
@@ -1099,7 +1097,7 @@ BOOST_AUTO_TEST_CASE(test_TimestampCorrect)
 
 BOOST_AUTO_TEST_SUITE_END()
 
-BOOST_FIXTURE_TEST_SUITE(ReframeErrorTests, PluginFixture)
+BOOST_FIXTURE_TEST_SUITE(ReframeErrorTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_WrongNDims)
 {

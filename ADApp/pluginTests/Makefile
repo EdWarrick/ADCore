@@ -4,24 +4,19 @@ include $(TOP)/configure/CONFIG
 #  ADD MACRO DEFINITIONS AFTER THIS LINE
 #=============================
 
+PROD_IOC += plugin-test
+plugin-test_SRCS += plugin-test.cpp
+plugin-test_SRCS += NDPluginMock.cpp
+plugin-test_SRCS += test_NDPluginCircularBuff.cpp
+plugin-test_SRCS += test_NDPluginReframe.cpp
+plugin-test_SRCS += test_NDFileHDF5.cpp
+USR_INCLUDES += $(HDF5_INCLUDE)
+USR_INCLUDES += $(SZ_INCLUDE)
+USR_INCLUDES += $(XML2_INCLUDE)
 
-BOOSTDIR=/dls_sw/prod/tools/RHEL6-x86_64/boost/1-48-0/prefix
+plugin-test_LIBS += boost_unit_test_framework simDetector
+boost_unit_test_framework_DIR=$(BOOST_LIB)
 
-ifdef BOOSTDIR
-boost_unit_test_framework_DIR=$(BOOSTDIR)/lib
-
-PROD_IOC += NDPluginCircularBuff_test
-NDPluginCircularBuff_test_SRCS += test_NDPluginCircularBuff.cpp NDPluginMock.cpp
-NDPluginCircularBuff_test_LIBS += asyn ADBase NDPlugin Com simDetector
-NDPluginCircularBuff_test_LIBS += boost_unit_test_framework
-
-PROD_IOC += NDPluginReframe_test
-NDPluginReframe_test_SRCS += test_NDPluginReframe.cpp NDPluginMock.cpp
-NDPluginReframe_test_LIBS += asyn ADBase NDPlugin Com simDetector
-NDPluginReframe_test_LIBS += boost_unit_test_framework
-
-endif # BOOSTDIR
-
-include $(TOP)/ADApp/commonLibraryMakefile
+include $(TOP)/ADApp/commonDriverMakefile
 
 include $(TOP)/configure/RULES

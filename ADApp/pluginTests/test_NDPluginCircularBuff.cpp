@@ -7,8 +7,7 @@
 
 #include <stdio.h>
 
-#define BOOST_TEST_DYN_LINK
-#define BOOST_TEST_MODULE "NDPluginCircularBuff Tests"
+
 #include "boost/test/unit_test.hpp"
 
 // AD dependencies
