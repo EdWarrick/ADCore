@@ -20,17 +20,6 @@ record(busy, "$(P)$(R)Capture") {
   field(OSV,  "MINOR")
 }
 
-# # Control readback record
-record(bi, "$(P)$(R)Capture_RBV") {
-  field(SCAN, "I/O Intr")
-  field(DTYP, "asynInt32")
-  field(INP, "@asyn($(PORT) 0)REFRAME_CONTROL")
-  field(ZNAM, "Done")
-  field(ZSV,  "NO_ALARM")
-  field(ONAM, "Capturing")
-  field(OSV,  "MINOR")
-}
-
 # Mode readback
 record(mbbi, "$(P)$(R)Mode_RBV") {
   field(DTYP, "asynInt32")
@@ -74,25 +63,25 @@ record(longout, "$(P)$(R)POSTCOUNT") {
 
 
 # # Force a soft trigger
-record(busy, "$(P)$(R)Trigger") {
+record(busy, "$(P)$(R)Soft_Trigger") {
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT) 0)REFRAME_SOFT_TRIGGER")
-  field(ZNAM, "Done")
+  field(ZNAM, "Off")
   field(ZSV,  "NO_ALARM")
-  field(ONAM, "Trigger")
+  field(ONAM, "On")
   field(OSV,  "MINOR")
   field(VAL, "1")
 }
 
-# # Has a trigger been received
-record(bi, "$(P)$(R)Trigger_RBV") {
+record(bi, $(P)$(R)Soft_Trigger_RBV") {
   field(SCAN, "I/O Intr")
   field(DTYP, "asynInt32")
-  field(INP, "@asyn($(PORT) 0)REFRAME_TRIGGERED")
+  field(INP, "@asyn($(PORT) 0)REFRAME_SOFT_TRIGGER")
   field(ZNAM, "Done")
   field(ZSV,  "NO_ALARM")
   field(ONAM, "Triggered")
   field(OSV,  "MINOR")
+
 }
 
 record(longout, "$(P)$(R)TriggerChannel") {
@@ -112,8 +101,8 @@ record(longout, "$(P)$(R)TriggerChannel") {
 record(bo, "$(P)$(R)TriggerOnCond") {
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT) 0)REFRAME_START_COND")
-  field(ZNAM, "On Low")
-  field(ONAM, "On High")
+  field(ZNAM, "Below Threshold")
+  field(ONAM, "Above Threshold")
   field(VAL, "1")
   field(PINI, "1")
 }
@@ -128,8 +117,8 @@ record(ao, "$(P)$(R)TriggerOnThresh") {
 record(bo, "$(P)$(R)TriggerOffCond") {
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT) 0)REFRAME_END_COND")
-  field(ZNAM, "On Low")
-  field(ONAM, "On High")
+  field(ZNAM, "Below Threshold")
+  field(ONAM, "Above Threshold")
   field(VAL, "0")
   field(PINI, "1")
 }
@@ -151,6 +140,18 @@ record(longout, "$(P)$(R)TriggerCount") {
 record(longin, "$(P)$(R)TriggerCount_RBV") {
   field(DTYP, "asynInt32")
   field(INP, "@asyn($(PORT) 0)REFRAME_TRIGGER_COUNT")
+  field(SCAN, "I/O Intr")
+}
+
+record(longin, "$(P)$(R)OutputCount_RBV") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_OUTPUT_COUNT")
+  field(SCAN, "I/O Intr")
+}
+
+record(longin, "$(P)$(R)IgnoredCount_RBV") {
+  field(DTYP, "asynInt32")
+  field(INP, "@asyn($(PORT) 0)REFRAME_IGNORED_COUNT")
   field(SCAN, "I/O Intr")
 }
 

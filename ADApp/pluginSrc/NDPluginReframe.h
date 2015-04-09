@@ -20,8 +20,6 @@ typedef enum NDPluginReframeMode {
 #define NDPluginReframeStatusString                "REFRAME_STATUS"        /* (asynOctetRead,    r/o) Status */
 #define NDPluginReframeModeString                  "REFRAME_MODE"          /* (asynInt32,        r/o) Mode */
 #define NDPluginReframeSoftTriggerString           "REFRAME_SOFT_TRIGGER"  /* (asynInt32,        r/w) Force a soft trigger */
-// ###TODO: Don't think this does anything. Replace with mode variable and implement some useful readback params.
-#define NDPluginReframeTriggeredString             "REFRAME_TRIGGERED"     /* (asynInt32,        r/o) Have we had a trigger event */
 #define NDPluginReframeTriggerDimensionString      "REFRAME_TRIGGER_DIM"   /* (asynInt32,        r/o) Dimension to use as time dimension */
 #define NDPluginReframeTriggerChannelString        "REFRAME_TRIGGER_CHAN"  /* (asynInt32,        r/w) Channel to use as trigger channel */
 #define NDPluginReframePreTriggerSamplesString     "REFRAME_PRE_SAMPLES"   /* (asynInt32,        r/w) Number of pre-trigger counts to output */
@@ -37,6 +35,9 @@ typedef enum NDPluginReframeMode {
                                                                                                               uniqueID for the output frames */
 #define NDPluginReframeTriggerEndedString          "REFRAME_TRIGGER_ENDED" /* (asynInt32,        r/o) Has end of gate been seen? Counterpart to
                                                                                                               NDPluginReframeTriggered */
+#define NDPluginReframeOutputCountString           "REFRAME_OUTPUT_COUNT"  /* (asynInt32,        r/o) How many frames have been output? */
+#define NDPluginReframeIgnoredCountString          "REFRAME_IGNORED_COUNT" /* (asynInt32,        e/o) How many triggers have arrived while processing another
+                                                                                                                trigger? */
 #define NDPluginReframeBufferFramesString          "REFRAME_BUFFER_FRAMES" /* (asynInt32,        r/o) Number of arrays stored in buffer */
 #define NDPluginReframeBufferSamplesString         "REFRAME_BUFFER_SAMPLES"/* (asynInt32,        r/o) Number of samples stored in buffer */
 
@@ -55,7 +56,6 @@ protected:
     int NDPluginReframeControl;
     #define FIRST_NDPLUGIN_REFRAME_PARAM NDPluginReframeControl
     int NDPluginReframeSoftTrigger;
-    int NDPluginReframeTriggered;
     int NDPluginReframeStatus;
     int NDPluginReframeMode;
 
@@ -71,6 +71,8 @@ protected:
     int NDPluginReframeTriggerEnded;
     int NDPluginReframeTriggerCount;
     int NDPluginReframeTriggerTotal;
+    int NDPluginReframeOutputCount;
+    int NDPluginReframeIgnoredCount;
     int NDPluginReframeBufferFrames;
     int NDPluginReframeBufferSamples;
     #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeBufferSamples

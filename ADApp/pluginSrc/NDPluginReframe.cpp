@@ -396,6 +396,9 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
 
 void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
 {
+    int outputCount;
+    getIntegerParam(NDPluginReframeOutputCount, &outputCount);
+
     if (pArrayCpy && arrayIsValid(pArrayCpy)) {
         switch(pArrayCpy->dataType) {
             case NDInt8:
@@ -466,6 +469,7 @@ void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
                 doCallbacksGenericPointer(outputArray, NDArrayData, 0);
                 this->lock();
                 outputArray->release();
+                outputCount++;
             }
         }
 
@@ -473,14 +477,16 @@ void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
         triggerEndOffset_ = 0;
         setIntegerParam(NDPluginReframeTriggerEnded, 0);
         setIntegerParam(NDPluginReframeMode, Idle);
+        setIntegerParam(NDPluginReframeOutputCount, outputCount);
     }
 }
 
 template <typename epicsType>
 void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 {
-    int mode;
+    int mode, outputCount;
     getIntegerParam(NDPluginReframeMode, &mode);
+    getIntegerParam(NDPluginReframeOutputCount, &outputCount);
 
     arrayBuffer_->push_back(pArrayCpy);
 
@@ -583,6 +589,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
                     doCallbacksGenericPointer(outputArray, NDArrayData, 0);
                     this->lock();
                     outputArray->release();
+                    outputCount++;
                 }
 
                 int currentTriggerCount, maxTriggerCount;
@@ -619,6 +626,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 
     setIntegerParam(NDPluginReframeBufferFrames, arrayBuffer_->size());
     setIntegerParam(NDPluginReframeBufferSamples, bufferSizeCounts(0));
+    setIntegerParam(NDPluginReframeOutputCount, outputCount);
 }
 
 /** Called when asyn clients call pasynInt32->write().
@@ -646,7 +654,6 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
             }
             // Set the status to buffer filling and clear any residual state current/last trigger
             setIntegerParam(NDPluginReframeSoftTrigger, 0);
-            setIntegerParam(NDPluginReframeTriggered, 0);
             setIntegerParam(NDPluginReframeTriggerCount, 0);
             setIntegerParam(NDPluginReframeTriggerEnded, 0);
             setIntegerParam(NDPluginReframeBufferFrames, 0);
@@ -719,7 +726,6 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     createParam(NDPluginReframeControlString,               asynParamInt32,   &NDPluginReframeControl);
     createParam(NDPluginReframeStatusString,                asynParamOctet,   &NDPluginReframeStatus);
     createParam(NDPluginReframeSoftTriggerString,           asynParamInt32,   &NDPluginReframeSoftTrigger);
-    createParam(NDPluginReframeTriggeredString,             asynParamInt32,   &NDPluginReframeTriggered);
     createParam(NDPluginReframeTriggerDimensionString,      asynParamInt32,   &NDPluginReframeTriggerDimension); // Hard-code to 1 for now
     createParam(NDPluginReframeTriggerChannelString,        asynParamInt32,   &NDPluginReframeTriggerChannel);
     createParam(NDPluginReframePreTriggerSamplesString,     asynParamInt32,   &NDPluginReframePreTriggerSamples);
@@ -732,6 +738,10 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     createParam(NDPluginReframeTriggerEndedString,          asynParamInt32,   &NDPluginReframeTriggerEnded);
     createParam(NDPluginReframeTriggerCountString,          asynParamInt32,   &NDPluginReframeTriggerCount);
     createParam(NDPluginReframeTriggerTotalString,          asynParamInt32,   &NDPluginReframeTriggerTotal);
+    createParam(NDPluginReframeOutputCountString,           asynParamInt32,   &NDPluginReframeOutputCount);
+    // ###TODO: Not implemented yet. A pain with current triggering system. If we implement overlapping triggers,
+    // much easier.
+    createParam(NDPluginReframeIgnoredCountString,          asynParamInt32,   &NDPluginReframeIgnoredCount);
     createParam(NDPluginReframeBufferFramesString,          asynParamInt32,   &NDPluginReframeBufferFrames);
     createParam(NDPluginReframeBufferSamplesString,         asynParamInt32,   &NDPluginReframeBufferSamples);
     createParam(NDPluginReframeModeString,                  asynParamInt32,   &NDPluginReframeMode);
@@ -761,6 +771,9 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     setIntegerParam(NDPluginReframeTriggerEnded, 0);
     setIntegerParam(NDPluginReframeTriggerCount, 0);
     setIntegerParam(NDPluginReframeTriggerTotal, 0);
+
+    setIntegerParam(NDPluginReframeOutputCount, 0);
+    setIntegerParam(NDPluginReframeIgnoredCount, 0);
 
     setIntegerParam(NDPluginReframeBufferFrames, 0);
     setIntegerParam(NDPluginReframeBufferSamples, 0);

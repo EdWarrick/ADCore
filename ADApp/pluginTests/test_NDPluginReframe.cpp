@@ -173,6 +173,8 @@ struct ReframeFixture
 
 int ReframeFixture::testCase = 0;
 
+BOOST_AUTO_TEST_SUITE(ReframeTests)
+
 BOOST_FIXTURE_TEST_SUITE(ReframeBufferingTests, ReframeFixture)
 
 // Verify that plugin starts off in idle mode and ignores frames sent to it (doesn't check them for triggers or add them to the buffer).
@@ -1242,5 +1244,7 @@ BOOST_AUTO_TEST_CASE(test_HandlesUInt8)
     NDArray *opArray = arrays->back();
     BOOST_CHECK_EQUAL(opArray->dims[1].size, 5);
 }
+
+BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_AUTO_TEST_SUITE_END()
