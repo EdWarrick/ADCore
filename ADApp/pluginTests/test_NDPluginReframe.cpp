@@ -39,6 +39,7 @@ struct ReframeFixture
     asynInt32Client *storedFrames;
     asynInt32Client *storedSamples;
     asynInt32Client *triggerMax;
+    asynInt32Client *triggerMode;
     asynInt32Client *triggerChannel;
     asynInt32Client *triggerCount;
     asynOctetClient *status;
@@ -90,6 +91,7 @@ struct ReframeFixture
         storedFrames = new asynInt32Client(testport, 0, NDPluginReframeBufferFramesString);
         storedSamples = new asynInt32Client(testport, 0, NDPluginReframeBufferSamplesString);
         triggerMax = new asynInt32Client(testport, 0, NDPluginReframeTriggerMaxString);
+        triggerMode = new asynInt32Client(testport, 0, NDPluginReframeRearmModeString);
         triggerChannel = new asynInt32Client(testport, 0, NDPluginReframeTriggerChannelString);
         triggerCount = new asynInt32Client(testport, 0, NDPluginReframeTriggerCountString);
         status = new asynOctetClient(testport, 0, NDPluginReframeStatusString);
@@ -110,6 +112,7 @@ struct ReframeFixture
         delete status;
         delete triggerCount;
         delete triggerChannel;
+        delete triggerMode;
         delete triggerMax;
         delete storedSamples;
         delete storedFrames;
@@ -517,6 +520,7 @@ BOOST_AUTO_TEST_CASE(test_MultiTrigger)
     offCond->write(1);
     offThresh->write(1.0);
     triggerMax->write(5.0);
+    triggerMode->write(1);
 
     size_t dims[2] = {3, 50};
     NDArray *testArray = emptyArray(2, dims);

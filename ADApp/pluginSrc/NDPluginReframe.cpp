@@ -484,9 +484,10 @@ void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
 template <typename epicsType>
 void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 {
-    int mode, outputCount;
+    int mode, outputCount, rearmMode;
     getIntegerParam(NDPluginReframeMode, &mode);
     getIntegerParam(NDPluginReframeOutputCount, &outputCount);
+    getIntegerParam(NDPluginReframeRearmMode, &rearmMode);
 
     arrayBuffer_->push_back(pArrayCpy);
 
@@ -600,7 +601,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 
                 // If we've reached the target number of triggers set to Idle mode, otherwise re-arm.
                 // If max is set to 0, we should re-arm indefinitely.
-                if (currentTriggerCount >= maxTriggerCount && maxTriggerCount > 0) {
+                if (rearmMode == Single || (rearmMode == Multiple && currentTriggerCount >= maxTriggerCount && maxTriggerCount > 0)) {
                     if (arrayBuffer_->size()) {
                         NDArray *carryArray = arrayBuffer_->front();
                         carryArray->release();
@@ -737,6 +738,7 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     createParam(NDPluginReframeTriggerMaxString,            asynParamInt32,   &NDPluginReframeTriggerMax);
     createParam(NDPluginReframeTriggerEndedString,          asynParamInt32,   &NDPluginReframeTriggerEnded);
     createParam(NDPluginReframeTriggerCountString,          asynParamInt32,   &NDPluginReframeTriggerCount);
+    createParam(NDPluginReframeRearmModeString,             asynParamInt32,   &NDPluginReframeRearmMode);
     createParam(NDPluginReframeTriggerTotalString,          asynParamInt32,   &NDPluginReframeTriggerTotal);
     createParam(NDPluginReframeOutputCountString,           asynParamInt32,   &NDPluginReframeOutputCount);
     // ###TODO: Not implemented yet. A pain with current triggering system. If we implement overlapping triggers,
@@ -767,6 +769,7 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     setDoubleParam(NDPluginReframeTriggerEndThreshold, 0.0);
 
     setIntegerParam(NDPluginReframeTriggerMax, 0);
+    setIntegerParam(NDPluginReframeRearmMode, Continuous);
 
     setIntegerParam(NDPluginReframeTriggerEnded, 0);
     setIntegerParam(NDPluginReframeTriggerCount, 0);

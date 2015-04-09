@@ -15,6 +15,12 @@ typedef enum NDPluginReframeMode {
     Acquiring
 } NDPluginReframeMode;
 
+typedef enum NDPluginRearmMode {
+    Single,
+    Multiple,
+    Continuous
+} NDPluginRearmMode;
+
 /* Param definitions */
 #define NDPluginReframeControlString               "REFRAME_CONTROL"       /* (asynInt32,        r/w) Arm plugin */
 #define NDPluginReframeStatusString                "REFRAME_STATUS"        /* (asynOctetRead,    r/o) Status */
@@ -31,6 +37,7 @@ typedef enum NDPluginReframeMode {
 #define NDPluginReframeTriggerMaxString            "REFRAME_TRIGGER_MAX"   /* (asynInt32,        r/w) Number of triggers/gates. ADC will disarm once
                                                                                                               reached. Set to 0 for continuous re-arm */
 #define NDPluginReframeTriggerCountString          "REFRAME_TRIGGER_COUNT" /* (asynInt32,        r/o) Triggers detected so far */
+#define NDPluginReframeRearmModeString            "REFRAME_REARM_MODE"    /* (asynInt32,        r/o) What to do after a trigger is emitted */
 #define NDPluginReframeTriggerTotalString          "REFRAME_TRIGGER_TOTAL" /* (asynInt32,        r/o) Total number of triggers output. Used to generate the
                                                                                                               uniqueID for the output frames */
 #define NDPluginReframeTriggerEndedString          "REFRAME_TRIGGER_ENDED" /* (asynInt32,        r/o) Has end of gate been seen? Counterpart to
@@ -70,6 +77,7 @@ protected:
     int NDPluginReframeTriggerMax;
     int NDPluginReframeTriggerEnded;
     int NDPluginReframeTriggerCount;
+    int NDPluginReframeRearmMode;
     int NDPluginReframeTriggerTotal;
     int NDPluginReframeOutputCount;
     int NDPluginReframeIgnoredCount;

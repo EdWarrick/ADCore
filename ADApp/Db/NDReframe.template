@@ -73,7 +73,7 @@ record(busy, "$(P)$(R)Soft_Trigger") {
   field(VAL, "1")
 }
 
-record(bi, $(P)$(R)Soft_Trigger_RBV") {
+record(bi, "$(P)$(R)Soft_Trigger_RBV") {
   field(SCAN, "I/O Intr")
   field(DTYP, "asynInt32")
   field(INP, "@asyn($(PORT) 0)REFRAME_SOFT_TRIGGER")
@@ -135,6 +135,18 @@ record(longout, "$(P)$(R)TriggerCount") {
   field(OUT, "@asyn($(PORT) 0)REFRAME_TRIGGER_MAX")
   field(VAL, "1")
   field(PINI, "1")
+}
+
+record(mbbo, "$(P)$(R)TriggerMode") {
+  field(DTYP, "asynInt32")
+  field(OUT, "@asyn($(PORT),$(ADDR),$(TIMEOUT))REFRAME_REARM_MODE")
+  field(ZRST, "Single")
+  field(ZRVL, "0")
+  field(ONST, "Multiple")
+  field(ONVL, "1")
+  field(TWST, "Continuous")
+  field(TWVL, "2")
+  field(VAL,  "2")
 }
 
 record(longin, "$(P)$(R)TriggerCount_RBV") {
