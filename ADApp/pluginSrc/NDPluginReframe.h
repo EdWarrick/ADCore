@@ -21,6 +21,13 @@ typedef enum NDPluginRearmMode {
     Continuous
 } NDPluginRearmMode;
 
+struct Trigger {
+    Trigger() : startOffset(-1), stopOffset(-1), done(false) {}
+    int startOffset;
+    int stopOffset;
+    bool done;
+};
+
 /* Param definitions */
 #define NDPluginReframeControlString               "REFRAME_CONTROL"       /* (asynInt32,        r/w) Arm plugin */
 #define NDPluginReframeStatusString                "REFRAME_STATUS"        /* (asynOctetRead,    r/o) Status */
@@ -47,6 +54,10 @@ typedef enum NDPluginRearmMode {
                                                                                                                 trigger? */
 #define NDPluginReframeBufferFramesString          "REFRAME_BUFFER_FRAMES" /* (asynInt32,        r/o) Number of arrays stored in buffer */
 #define NDPluginReframeBufferSamplesString         "REFRAME_BUFFER_SAMPLES"/* (asynInt32,        r/o) Number of samples stored in buffer */
+#define NDPluginReframeMaxTriggersString           "REFRAME_MAX_TRIGGERS"  /* (asynInt32,        r/w) Max number of overlapping triggers to permit */
+#define NDPluginReframeBufferedTriggersString      "REFRAME_BUFF_TRIGGERS" /* (asynInt32,        r/o) Number of triggers currently detected and awaiting completion */
+#define NDPluginReframeOverlappingTriggersString   "REFRAME_OVERLAP_TRIGS" /* (asynInt32,        r/w) Can triggers overlap? If not, then all data output will
+                                                                                                      be deleted from buffer & never duplicated */
 
 class epicsShareClass NDPluginReframe : public NDPluginDriver {
 public:
@@ -83,22 +94,27 @@ protected:
     int NDPluginReframeIgnoredCount;
     int NDPluginReframeBufferFrames;
     int NDPluginReframeBufferSamples;
-    #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeBufferSamples
+
+    int NDPluginReframeMaxTriggers;
+    int NDPluginReframeBufferedTriggers;
+    int NDPluginReframeOverlappingTriggers;
+    #define LAST_NDPLUGIN_REFRAME_PARAM NDPluginReframeOverlappingTriggers
 
 private:
     // Methods
-    template<typename epicsType> int containsTriggerStart();                    // Search for gate start in current buffer and return true if found. Sets gateStartOffset_.
-    template<typename epicsType> int containsTriggerEnd();                      // Search for gate end in current buffer and return true if found. Sets gateEndOffset_.
-    template<typename epicsType> NDArray *constructOutput();               // Create a single output NDArray from the arrays stored in preBuffer_.
+    template<typename epicsType> bool containsTriggerStart();              // Search for gate start in current buffer and return true if found. Sets triggerOnIndex_.
+    template<typename epicsType> bool containsTriggerEnd();                // Search for gate end in current buffer and return true if found. Sets triggerOffIndex_.
+    template<typename epicsType> NDArray *constructOutput(Trigger *trig);  // Create a single output NDArray from the arrays stored in preBuffer_.
     void handleNewArray(NDArray *pDataCopy);
     template<typename epicsType> void handleNewArrayT(NDArray *pDataCopy);
-    int bufferSizeCounts(int start);          // Utility function; walks the NDArray buffer from the given start array to the end and returns the total size in counts.
+    int bufferSizeCounts(int start);           // Utility function; walks the NDArray buffer from the given start array to the end and returns the total size in counts.
     int arrayIsValid(NDArray *pArray);         // Checks that input arrays have the expected number of dimensions & the number of channels is consistent.
 
     // Data
     std::deque<NDArray *> *arrayBuffer_;
-    int triggerStartOffset_;
-    int triggerEndOffset_;
+    std::deque<Trigger *> *triggerQueue_;
+    int triggerOnIndex_;
+    int triggerOffIndex_;
 };
 #define NUM_NDPLUGIN_REFRAME_PARAMS ((int)(&LAST_NDPLUGIN_REFRAME_PARAM - &FIRST_NDPLUGIN_REFRAME_PARAM + 1))
 
