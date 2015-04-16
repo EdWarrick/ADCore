@@ -356,6 +356,7 @@ BOOST_FIXTURE_TEST_SUITE(ReframeTriggeringTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
 {
+    printf("1\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -396,6 +397,7 @@ BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
 
 BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
 {
+    printf("2\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -437,6 +439,7 @@ BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
 
 BOOST_AUTO_TEST_CASE(test_SoftTrigger)
 {
+    printf("3\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -458,6 +461,7 @@ BOOST_AUTO_TEST_CASE(test_SoftTrigger)
 
 BOOST_AUTO_TEST_CASE(test_GatingTriggerHigh)
 {
+    printf("4\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -485,6 +489,7 @@ BOOST_AUTO_TEST_CASE(test_GatingTriggerHigh)
 
 BOOST_AUTO_TEST_CASE(test_GatingTriggerLow)
 {
+    printf("5\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -512,6 +517,7 @@ BOOST_AUTO_TEST_CASE(test_GatingTriggerLow)
 
 BOOST_AUTO_TEST_CASE(test_MultiTrigger)
 {
+    printf("6\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -547,6 +553,7 @@ BOOST_AUTO_TEST_CASE(test_MultiTrigger)
 
 BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
 {
+    printf("7\n");
     control->write(1);
     preTrigger->write(3);
     postTrigger->write(5);
@@ -575,25 +582,28 @@ BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
     triggerCount->read(&trigs);
 
     BOOST_CHECK_EQUAL(dscount, 12);
-    BOOST_REQUIRE_EQUAL(trigs, 12);
+    BOOST_CHECK_EQUAL(trigs, 12);
 }
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
 {
+    printf("8\n");
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
-    BOOST_REQUIRE(false);
+    BOOST_CHECK(false);
 }
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
 {
+    printf("9\n");
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
-    BOOST_REQUIRE(false);
+    BOOST_CHECK(false);
 }
 
 BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
 {
+    printf("10\n");
     control->write(1);
     preTrigger->write(30);
     postTrigger->write(67);
@@ -621,6 +631,7 @@ BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
 
 BOOST_AUTO_TEST_CASE(test_IgnoresNonTriggerChannel)
 {
+    printf("11\n");
     control->write(1);
     preTrigger->write(30);
     postTrigger->write(67);

@@ -44,7 +44,7 @@ bool NDPluginReframe::containsTriggerStart()
     // ###TODO: This needs to return a bool, and set the triggerOnIndex_ to either the location of
     // the trigger we found (+1?) or to the end of the array if we found none so the search will
     // start correctly on the next array.
-  int startCondition, nChannels, nSamples, triggerChannel;
+  int startCondition, nChannels, nSamples, triggerChannel, arrayIndex;
   bool triggerFound = false;
   epicsType *buffer;
   double threshold;
@@ -56,10 +56,10 @@ bool NDPluginReframe::containsTriggerStart()
   getDoubleParam(NDPluginReframeTriggerStartThreshold, &threshold);
 
   //Get the oldest unchecked array from the buffer:
-  std::deque<NDArray *>::iterator iter;
+  std::deque<NDArray *>::iterator iter = arrayBuffer_->begin();
   int arrayOffset = 0;
   // Advance the iterator to skip arrays that have already been checked.
-  while (triggerOnIndex_ > arrayOffset) {
+  while (iter != arrayBuffer_->end() && triggerOnIndex_ > arrayOffset + (int)(*iter)->dims[1].size) {
       arrayOffset += (*iter)->dims[1].size + arrayOffset;
       iter++;
   }
@@ -75,8 +75,14 @@ bool NDPluginReframe::containsTriggerStart()
 
       // Find offset into buffer of the start of this array
       //int arrayOffset = bufferSizeCounts(0) - nSamples;
+      if (triggerOnIndex_ > arrayOffset) {
+          arrayIndex = triggerOnIndex_ - arrayOffset;
+      } else {
+          arrayIndex = 0;
+      }
 
-      for (int sample = 0; sample < nSamples; sample++) {
+
+      for (int sample = arrayIndex; sample < nSamples; sample++) {
 
           epicsType triggerVal = buffer[sample * nChannels + triggerChannel];
 
@@ -103,7 +109,10 @@ bool NDPluginReframe::containsTriggerStart()
       if (triggerFound)
           break;
 
+      // Mark this entire array as having been searched, and advance the iterator
       arrayOffset += (*iter)->dims[1].size + arrayOffset;
+      triggerOnIndex_ = arrayOffset;
+      triggerOffIndex_ = arrayOffset;
       iter++;
   }
 
@@ -133,10 +142,10 @@ bool NDPluginReframe::containsTriggerEnd()
     getDoubleParam(NDPluginReframeTriggerEndThreshold, &threshold);
 
     //Get the oldest unchecked array from the buffer:
-    std::deque<NDArray *>::iterator iter;
+    std::deque<NDArray *>::iterator iter = arrayBuffer_->begin();
     int arrayOffset = 0;
     // Advance the iterator to skip arrays that have already been checked.
-    while (triggerOffIndex_ > arrayOffset) {
+    while (iter != arrayBuffer_->end() && triggerOffIndex_ > arrayOffset+(int)(*iter)->dims[1].size) {
         arrayOffset += (*iter)->dims[1].size + arrayOffset;
         iter++;
     }
@@ -183,6 +192,8 @@ bool NDPluginReframe::containsTriggerEnd()
             break;
 
         arrayOffset += (*iter)->dims[1].size + arrayOffset;
+        triggerOnIndex_ = arrayOffset;
+        triggerOffIndex_ = arrayOffset;
         iter++;
     }
 
@@ -254,10 +265,10 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   // How to handle this case?
   outputCounts = preTriggerCounts + triggerCounts + postTriggerCounts;
 
-  std::deque<NDArray *>::iterator iter;
+  std::deque<NDArray *>::iterator iter=arrayBuffer_->begin();
   int skippedCounts = 0;
   // Advance the iterator to the first array that actually contributes to the output.
-  while (trig->startOffset - preTrigger > (*iter)->dims[1].size + skippedCounts) {
+  while (trig->startOffset - preTrigger > (int)(*iter)->dims[1].size + skippedCounts) {
       skippedCounts += (*iter)->dims[1].size + skippedCounts;
       iter++;
   }
@@ -360,40 +371,12 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
 
           std::deque<Trigger *>::iterator iter;
           for (iter = triggerQueue_->begin(); iter != triggerQueue_->end(); iter++) {
-              Trigger *trig = *iter;
-              trig->startOffset = MAX(trig->startOffset - size, -1);
-              trig->stopOffset = MAX(trig->stopOffset - size, -1);
+              Trigger *shiftTrig = *iter;
+              shiftTrig->startOffset = MAX(shiftTrig->startOffset - size, -1);
+              shiftTrig->stopOffset = MAX(shiftTrig->stopOffset - size, -1);
           }
 
 
-      }
-
-      // Triggers will have been shifted if truncation occurred, so check if any are now before the start of the buffer:
-      while (!triggerQueue_->empty() && triggerQueue_->front()->startOffset < 0) {
-          Trigger *trig = triggerQueue_->front();
-          triggerQueue_->pop_front();
-          // Handling "stranded" triggers is tricky. If both start and end are now behind the start of the array, we can discard the trigger.
-          // However if the start is now stranded but the end still falls in relevant data, or if the trigger is still waiting for the end condition,
-          // we need to retest to see if the data from the start of the array would still pass the trigger condition. If so, we construct a new trigger
-          // and prepend it to the queue.
-          if (trig->stopOffset >= 0 || trig->done) {
-             // Cache the trigger index
-             int trigOnCache = triggerOnIndex_;
-             int trigOffCache = triggerOffIndex_;
-             // Do the test (is there an on condition and does it belong to this trigger?)
-             if (containsTriggerStart<epicsType>() && (triggerOnIndex_ <= trig->stopOffset + 1 || trig->done)) {
-                 Trigger *newTrig = new Trigger;
-                 newTrig->startOffset = triggerOnIndex_-1;
-                 newTrig->stopOffset = trig->stopOffset;
-                 newTrig->done = trig->done;
-                 triggerQueue_->push_front(newTrig);
-             }
-             // Restore the trigger index
-             triggerOnIndex_ = trigOnCache;
-             triggerOffIndex_ = trigOffCache;
-          }
-
-          delete trig;
       }
 
       // If there is a carry array add it to the buffer
@@ -405,6 +388,40 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
           setIntegerParam(NDPluginReframeBufferFrames, 0);
           setIntegerParam(NDPluginReframeBufferSamples, 0);
       }
+
+      // ###TODO:
+      // Notes we're resetting the trigger index for every step, so we'll just hit the same trigger over and over.
+      // Really there should only ever be at most 1 trigger straddling start of buffer as gates can't overlap.
+      // Also we aren't handling trigger deletion if we do allow overlapping.
+      // Triggers will have been shifted if truncation occurred, so check if any are now before the start of the buffer:
+      while (!triggerQueue_->empty() && triggerQueue_->front()->startOffset < 0) {
+          Trigger *strandedTrig = triggerQueue_->front();
+          triggerQueue_->pop_front();
+          // Handling "stranded" triggers is tricky. If both start and end are now behind the start of the array, we can discard the trigger.
+          // However if the start is now stranded but the end still falls in relevant data, or if the trigger is still waiting for the end condition,
+          // we need to retest to see if the data from the start of the array would still pass the trigger condition. If so, we construct a new trigger
+          // and prepend it to the queue.
+          if (strandedTrig->stopOffset >= 0 || !strandedTrig->done) {
+             // Cache the trigger index
+             int trigOnCache = triggerOnIndex_;
+             int trigOffCache = triggerOffIndex_;
+             // Do the test (is there an on condition and does it belong to this trigger?)
+             if (containsTriggerStart<epicsType>() && (triggerOnIndex_ <= strandedTrig->stopOffset + 1 || strandedTrig->done)) {
+                 Trigger *newTrig = new Trigger;
+                 newTrig->startOffset = triggerOnIndex_-1;
+                 newTrig->stopOffset = strandedTrig->stopOffset;
+                 newTrig->done = strandedTrig->done;
+                 triggerQueue_->push_front(newTrig);
+             }
+             // Restore the trigger index
+             triggerOnIndex_ = trigOnCache;
+             triggerOffIndex_ = trigOffCache;
+          }
+
+          delete strandedTrig;
+      }
+
+
   }
 
   // Handle the unique ID
@@ -623,7 +640,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
     while (triggerOnIndex_ < bufferSizeCounts(0) || triggerOffIndex_ < bufferSizeCounts(0)) {
         if (triggerQueue_->empty() || triggerQueue_->back()->stopOffset >= 0) {
             if (containsTriggerStart<epicsType>()) {
-                if (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs) {
+                if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
                     Trigger *trig = new Trigger;
                     trig->startOffset = triggerOnIndex_-1;
                     trig->stopOffset = -1;
@@ -633,7 +650,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
                 }
             } else if (softTrig) {
                 // Should be OK not to move triggerOnIndex_ in this case, so further real trigs in this array will be detected.
-                if (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs) {
+                if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
                     Trigger *trig = new Trigger;
                     trig->startOffset = bufferSizeCounts(0) - arrayBuffer_->back()->dims[1].size;
                     trig->stopOffset = bufferSizeCounts(0) - arrayBuffer_->back()->dims[1].size;
@@ -659,8 +676,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
     // If the oldest trigger is off, and enough bytes have been received for its post trigger
     while (!triggerQueue_->empty() && triggerQueue_->front()->stopOffset >= 0 && (bufferSizeCounts(0) - triggerQueue_->front()->stopOffset >= postTrigger)) {
         trigCount++;
-        Trigger *trig = triggerQueue_->front();
-        NDArray *outputArray = constructOutput<epicsType>(trig);
+        NDArray *outputArray = constructOutput<epicsType>(triggerQueue_->front());
         if (outputArray) {
             this->unlock();
             doCallbacksGenericPointer(outputArray, NDArrayData, 0);
@@ -668,9 +684,8 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
             outputArray->release();
 //            outputCount++;
         }
-        triggerQueue_->pop_front();
-        delete trig;
 
+        // ###TODO: We used to delete the trigger here, this is sometimes done by constructOutput so figure out whether this is reliable.
         // If we've now reached our target # of triggers, clear the trigger queue.
         if (rearmMode == Single || (rearmMode == Multiple && trigCount >= maxTrigCount)) {
             while(!triggerQueue_->empty()) {
@@ -686,7 +701,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
     //   - If no triggers buffered, prune old arrays if there is enough data in the rest of the buffer to construct the pre-buffer.
     //   - If there are triggers, prune old arrays if they don't contribute to the pre-trigger for the oldest array.
     // - Finally update all offsets in trigger buffer, and the trigger search indices, to reflect any pruned arrays.
-    while ((!arrayBuffer_->empty() && bufferSizeCounts(1) >= preTrigger) || (triggerQueue_->front()->startOffset - arrayBuffer_->front()->dims[1].size >= preTrigger)) {
+    while ((!arrayBuffer_->empty() && bufferSizeCounts(1) >= preTrigger) || (!triggerQueue_->empty() && triggerQueue_->front()->startOffset - arrayBuffer_->front()->dims[1].size >= preTrigger)) {
         NDArray *oldArray = arrayBuffer_->front();
         size_t size = oldArray->dims[1].size;
 
@@ -695,15 +710,20 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
         triggerOnIndex_ = MAX(triggerOnIndex_ - size, -1);
         triggerOffIndex_ = MAX(triggerOffIndex_ - size, -1);
 
-        // Iterate over the arrays from oldest to newest.
+        // Update the trigger offsets to reflect the moved buffer start
         std::deque<Trigger *>::iterator iter;
         for (iter = triggerQueue_->begin(); iter != triggerQueue_->end(); iter++) {
             Trigger *trig = *iter;
             trig->startOffset = MAX(trig->startOffset - size, -1);
             trig->stopOffset = MAX(trig->stopOffset - size, -1);
         }
+        printf("%d, %d, %d, %d\n", arrayBuffer_->empty(), triggerQueue_->empty(), arrayBuffer_->size(), triggerQueue_->size());
     }
 
+    setIntegerParam(NDPluginReframeTriggerCount, trigCount);
+    setIntegerParam(NDPluginReframeOutputCount, trigCount);
+    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
+    setIntegerParam(NDPluginReframeBufferedTriggers, triggerQueue_->size());
     setIntegerParam(NDPluginReframeBufferFrames, arrayBuffer_->size());
     setIntegerParam(NDPluginReframeBufferSamples, bufferSizeCounts(0));
 }
