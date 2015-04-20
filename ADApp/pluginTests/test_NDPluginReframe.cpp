@@ -10,6 +10,7 @@
 
 // AD dependencies
 #include <NDPluginReframe.h>
+#include <NDPluginROI.h>
 #include <simDetector.h>
 #include <NDArray.h>
 #include <asynPortClient.h>
@@ -19,13 +20,19 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <deque>
+
+#include <epicsTypes.h>
+using namespace std;
 
 struct ReframeFixture
 {
     NDArrayPool *arrayPool;
-    simDetector *driver;
+    static simDetector *driver;
     NDPluginReframe *rf;
     NDPluginMock *ds;
+
+    NDPluginROI *roi;
 
     // Mock downstream params
     asynInt32Client *enableCallbacks;
@@ -63,14 +70,15 @@ struct ReframeFixture
         // change it slightly for each test case.
         char simport[50], testport[50], dsport[50];
         sprintf(simport, "simPort%d", testCase);
-        // We need some upstream driver for our test plugin so that calls to connectArrayPort don't fail, but we can then ignore it and send
-        // arrays by calling processCallbacks directly.
+//        // We need some upstream driver for our test plugin so that calls to connectArrayPort don't fail, but we can then ignore it and send
+//        // arrays by calling processCallbacks directly.
+
         driver = new simDetector(simport, 800, 500, NDFloat64, 50, 0, 0, 2000000);
 
         // This is the plugin under test
         sprintf(testport, "testPort%d", testCase);
         rf = new NDPluginReframe(testport, 50, 0, simport, 0, 1000, -1, 0, 2000000);
-//
+
         // This is the mock downstream plugin
         sprintf(dsport, "dsPort%d", testCase);
         ds = new NDPluginMock(dsport, 16, 1, testport, 0, 50, -1, 0, 2000000);
@@ -175,6 +183,7 @@ struct ReframeFixture
 };
 
 int ReframeFixture::testCase = 0;
+simDetector *ReframeFixture::driver = NULL;
 
 BOOST_AUTO_TEST_SUITE(ReframeTests)
 
@@ -356,7 +365,6 @@ BOOST_FIXTURE_TEST_SUITE(ReframeTriggeringTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
 {
-    printf("1\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -397,7 +405,6 @@ BOOST_AUTO_TEST_CASE(test_SimpleTriggerHigh)
 
 BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
 {
-    printf("2\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -439,7 +446,6 @@ BOOST_AUTO_TEST_CASE(test_SimpleTriggerLow)
 
 BOOST_AUTO_TEST_CASE(test_SoftTrigger)
 {
-    printf("3\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -461,7 +467,6 @@ BOOST_AUTO_TEST_CASE(test_SoftTrigger)
 
 BOOST_AUTO_TEST_CASE(test_GatingTriggerHigh)
 {
-    printf("4\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -489,7 +494,6 @@ BOOST_AUTO_TEST_CASE(test_GatingTriggerHigh)
 
 BOOST_AUTO_TEST_CASE(test_GatingTriggerLow)
 {
-    printf("5\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -517,7 +521,6 @@ BOOST_AUTO_TEST_CASE(test_GatingTriggerLow)
 
 BOOST_AUTO_TEST_CASE(test_MultiTrigger)
 {
-    printf("6\n");
     control->write(1);
     preTrigger->write(5);
     postTrigger->write(5);
@@ -553,7 +556,6 @@ BOOST_AUTO_TEST_CASE(test_MultiTrigger)
 
 BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
 {
-    printf("7\n");
     control->write(1);
     preTrigger->write(3);
     postTrigger->write(5);
@@ -587,7 +589,6 @@ BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
 {
-    printf("8\n");
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
     BOOST_CHECK(false);
@@ -595,7 +596,6 @@ BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
 {
-    printf("9\n");
     // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
     // bit hacky and probably relies on undefined behaviour.
     BOOST_CHECK(false);
@@ -603,7 +603,6 @@ BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
 
 BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
 {
-    printf("10\n");
     control->write(1);
     preTrigger->write(30);
     postTrigger->write(67);
@@ -631,7 +630,6 @@ BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
 
 BOOST_AUTO_TEST_CASE(test_IgnoresNonTriggerChannel)
 {
-    printf("11\n");
     control->write(1);
     preTrigger->write(30);
     postTrigger->write(67);
@@ -682,15 +680,15 @@ BOOST_AUTO_TEST_CASE(test_WindowLTFrameSize)
 
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
     int samples;
     storedSamples->read(&samples);
 
-    BOOST_CHECK_EQUAL(arrays->size(), 3);
+    BOOST_CHECK_EQUAL(arrs->size(), 3);
 
-    BOOST_CHECK_EQUAL(arrays->at(0)->dims[1].size, 13);
-    BOOST_CHECK_EQUAL(arrays->at(1)->dims[1].size, 13);
-    BOOST_CHECK_EQUAL(arrays->at(2)->dims[1].size, 13);
+    BOOST_CHECK_EQUAL(arrs->at(0)->dims[1].size, 13);
+    BOOST_CHECK_EQUAL(arrs->at(1)->dims[1].size, 13);
+    BOOST_CHECK_EQUAL(arrs->at(2)->dims[1].size, 13);
 
     // With no gate trigger sample should be first
     // sample of post trigger
@@ -724,13 +722,13 @@ BOOST_AUTO_TEST_CASE(test_WindowGTFrameSize)
     for (int i = 0; i < 15; i++)
         rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
     int samples;
     storedSamples->read(&samples);
 
-    BOOST_CHECK_EQUAL(arrays->size(), 1);
+    BOOST_CHECK_EQUAL(arrs->size(), 1);
 
-    BOOST_CHECK_EQUAL(arrays->front()->dims[1].size, 120);
+    BOOST_CHECK_EQUAL(arrs->front()->dims[1].size, 120);
 
     BOOST_CHECK_EQUAL(samples, 8);
 }
@@ -760,11 +758,11 @@ BOOST_AUTO_TEST_CASE(test_WindowSizeCorrect)
     rfProcess(testArray);
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_CHECK_EQUAL(arrays->size(), 3);
-    BOOST_CHECK_EQUAL(arrays->front()->dims[1].size, 3+4+5);
-    BOOST_CHECK_EQUAL(arrays->at(1)->dims[1].size, 4+4+5);
+    BOOST_CHECK_EQUAL(arrs->size(), 3);
+    BOOST_CHECK_EQUAL(arrs->front()->dims[1].size, 3+4+5);
+    BOOST_CHECK_EQUAL(arrs->at(1)->dims[1].size, 4+4+5);
 }
 
 BOOST_AUTO_TEST_CASE(test_DataOrderPreserved)
@@ -789,11 +787,11 @@ BOOST_AUTO_TEST_CASE(test_DataOrderPreserved)
     rfProcess(testArray2);
     rfProcess(testArray3);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 61);
     double *pData = (double *)opArray->pData;
 
@@ -828,11 +826,11 @@ BOOST_AUTO_TEST_CASE(test_ZeroPreTrigger)
 
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 5);
 
@@ -857,11 +855,11 @@ BOOST_AUTO_TEST_CASE(test_ZeroPostTrigger)
 
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 6);
 
@@ -888,11 +886,11 @@ BOOST_AUTO_TEST_CASE(test_ZeroPreAndPost)
 
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
     int trigs;
     triggerCount->read(&trigs);
 
-    BOOST_CHECK_EQUAL(arrays->size(), 0);
+    BOOST_CHECK_EQUAL(arrs->size(), 0);
     BOOST_CHECK_EQUAL(trigs, 1);
 }
 
@@ -916,11 +914,11 @@ BOOST_AUTO_TEST_CASE(test_PreTriggerOnBufferStart)
     rfProcess(testArray2);
     rfProcess(testArray3);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 15);
 
@@ -954,11 +952,11 @@ BOOST_AUTO_TEST_CASE(test_WindowAlignedWithFrameBoundary)
     rfProcess(testArray4);
     rfProcess(testArray5);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 15);
 
@@ -984,11 +982,11 @@ BOOST_AUTO_TEST_CASE(test_PreTriggerTruncation)
 
     rfProcess(testArray1);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_CHECK_EQUAL(opArray->dims[1].size, 3);
 }
@@ -1021,11 +1019,11 @@ BOOST_AUTO_TEST_CASE(test_HandlesVariableSampleSizes)
     rfProcess(testArray4);
     rfProcess(testArray5);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
 
-    NDArray *opArray = arrays->front();
+    NDArray *opArray = arrs->front();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 21);
 
@@ -1060,11 +1058,11 @@ BOOST_AUTO_TEST_CASE(test_CarryBufferCorrect)
     pData[0] = 101.0;
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
+    deque<NDArray *> *arrs = ds->arrays();
 
-    BOOST_REQUIRE_EQUAL(arrays->size(), 2);
+    BOOST_REQUIRE_EQUAL(arrs->size(), 2);
 
-    NDArray *opArray = arrays->back();
+    NDArray *opArray = arrs->back();
 
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 3);
 
@@ -1138,9 +1136,9 @@ BOOST_AUTO_TEST_CASE(test_WrongNDims)
     rfProcess(testArray);
     rfProcess(badArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
-    NDArray *opArray = arrays->back();
+    deque<NDArray *> *arrs = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+    NDArray *opArray = arrs->back();
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
     int frames;
     storedFrames->read(&frames);
@@ -1169,9 +1167,9 @@ BOOST_AUTO_TEST_CASE(test_InconsistentChannelNum)
     rfProcess(testArray);
     rfProcess(badArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
-    NDArray *opArray = arrays->back();
+    deque<NDArray *> *arrs = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+    NDArray *opArray = arrs->back();
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
     int frames;
     storedFrames->read(&frames);
@@ -1197,8 +1195,8 @@ BOOST_AUTO_TEST_CASE(test_NoTriggerChannel)
 
     rfProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
-    BOOST_REQUIRE_EQUAL(arrays->size(), 0);
+    deque<NDArray *> *arrs = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrs->size(), 0);
     int frames;
     storedFrames->read(&frames);
     BOOST_CHECK_EQUAL(frames, 0);
@@ -1226,9 +1224,9 @@ BOOST_AUTO_TEST_CASE(test_WrongDataType)
     rfProcess(badArray);
 
     badArray->release();
-    deque<NDArray *> *arrays = ds->arrays();
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
-    NDArray *opArray = arrays->back();
+    deque<NDArray *> *arrs = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+    NDArray *opArray = arrs->back();
     BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 4);
     int frames;
     storedFrames->read(&frames);
@@ -1254,9 +1252,9 @@ BOOST_AUTO_TEST_CASE(test_HandlesUInt8)
     rfProcess(testArray);
     testArray->release();
 
-    deque<NDArray *> *arrays = ds->arrays();
-    BOOST_REQUIRE_EQUAL(arrays->size(), 1);
-    NDArray *opArray = arrays->back();
+    deque<NDArray *> *arrs = ds->arrays();
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+    NDArray *opArray = arrs->back();
     BOOST_CHECK_EQUAL(opArray->dims[1].size, 5);
 }
 

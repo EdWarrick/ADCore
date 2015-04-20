@@ -21,14 +21,17 @@
 #include <string.h>
 #include <stdint.h>
 
+#include "testingutilities.h"
+
+using namespace std;
+
+
 struct PluginFixture
 {
     NDArrayPool *arrayPool;
     simDetector *driver;
     NDPluginCircularBuff *cb;
-    NDPluginMock *ds;
-    asynInt32Client *enableCallbacks;
-    asynInt32Client *blockingCallbacks;
+    TestingPlugin *ds;
     asynInt32Client *cbControl;
     asynInt32Client *cbPreTrigger;
     asynInt32Client *cbPostTrigger;
@@ -38,46 +41,37 @@ struct PluginFixture
     asynOctetClient *cbTrigA;
     asynOctetClient *cbTrigB;
     asynOctetClient *cbCalc;
-    static int testCase;
 
     PluginFixture()
     {
         arrayPool = new NDArrayPool(100, 0);
 
+        std::string simport("simPort"), testport("testPort");
+
         // Asyn manager doesn't like it if we try to reuse the same port name for multiple drivers (even if only one is ever instantiated at once), so
         // change it slightly for each test case.
-        char simport[50], testport[50], dsport[50];
-        sprintf(simport, "simPort%d", testCase);
+        uniqueAsynPortName(simport);
+        uniqueAsynPortName(testport);
+
         // We need some upstream driver for our test plugin so that calls to connectArrayPort don't fail, but we can then ignore it and send
         // arrays by calling processCallbacks directly.
-        driver = new simDetector(simport, 800, 500, NDFloat64, 50, 0, 0, 2000000);
+        driver = new simDetector(simport.c_str(), 800, 500, NDFloat64, 50, 0, 0, 2000000);
 
         // This is the plugin under test
-        sprintf(testport, "testPort%d", testCase);
-        cb = new NDPluginCircularBuff(testport, 50, 0, simport, 0, 1000, -1, 0, 2000000);
+        cb = new NDPluginCircularBuff(testport.c_str(), 50, 0, simport.c_str(), 0, 1000, -1, 0, 2000000);
 
         // This is the mock downstream plugin
-        sprintf(dsport, "dsPort%d", testCase);
-        ds = new NDPluginMock(dsport, 16, 1, testport, 0, 50, -1, 0, 2000000);
+        ds = new TestingPlugin(testport.c_str(), 0);
 
-        enableCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverEnableCallbacksString);
-        blockingCallbacks = new asynInt32Client(dsport, 0, NDPluginDriverBlockingCallbacksString);
-        cbControl = new asynInt32Client(testport, 0, NDCircBuffControlString);
-        cbPreTrigger = new asynInt32Client(testport, 0, NDCircBuffPreTriggerString);
-        cbPostTrigger = new asynInt32Client(testport, 0, NDCircBuffPostTriggerString);
-        cbSoftTrigger = new asynInt32Client(testport, 0, NDCircBuffSoftTriggerString);
-        cbStatus = new asynOctetClient(testport, 0, NDCircBuffStatusString);
-        cbCount = new asynInt32Client(testport, 0, NDCircBuffCurrentImageString);
-        cbTrigA = new asynOctetClient(testport, 0, NDCircBuffTriggerAString);
-        cbTrigB = new asynOctetClient(testport, 0, NDCircBuffTriggerBString);
-        cbCalc = new asynOctetClient(testport, 0, NDCircBuffTriggerCalcString);
-
-        // Set the downstream plugin to receive callbacks from the test plugin and to run in blocking mode, so we don't need to worry about synchronisation
-        // with the downstream plugin.
-        enableCallbacks->write(1);
-        blockingCallbacks->write(1);
-
-        testCase++;
+        cbControl = new asynInt32Client(testport.c_str(), 0, NDCircBuffControlString);
+        cbPreTrigger = new asynInt32Client(testport.c_str(), 0, NDCircBuffPreTriggerString);
+        cbPostTrigger = new asynInt32Client(testport.c_str(), 0, NDCircBuffPostTriggerString);
+        cbSoftTrigger = new asynInt32Client(testport.c_str(), 0, NDCircBuffSoftTriggerString);
+        cbStatus = new asynOctetClient(testport.c_str(), 0, NDCircBuffStatusString);
+        cbCount = new asynInt32Client(testport.c_str(), 0, NDCircBuffCurrentImageString);
+        cbTrigA = new asynOctetClient(testport.c_str(), 0, NDCircBuffTriggerAString);
+        cbTrigB = new asynOctetClient(testport.c_str(), 0, NDCircBuffTriggerBString);
+        cbCalc = new asynOctetClient(testport.c_str(), 0, NDCircBuffTriggerCalcString);
 
     }
     ~PluginFixture()
@@ -91,9 +85,7 @@ struct PluginFixture
         delete cbPostTrigger;
         delete cbPreTrigger;
         delete cbControl;
-        delete blockingCallbacks;
-        delete enableCallbacks;
-        delete ds;
+        //delete ds; // TODO: something is wrong here - if we delete ds we get a memory corruption error (in a loop!?!?)
         delete cb;
         delete driver;
         delete arrayPool;
@@ -105,8 +97,6 @@ struct PluginFixture
         cb->unlock();
     }
 };
-
-int PluginFixture::testCase = 0;
 
 BOOST_FIXTURE_TEST_SUITE(CircularBuffTests, PluginFixture)
 
@@ -123,13 +113,13 @@ BOOST_AUTO_TEST_CASE(test_BufferWrappingAndStatusMessages)
   char status[50] = {0};
 
   cbStatus->read(status, 50, &gotbytes, &eom);
-  BOOST_REQUIRE_EQUAL(strcmp(status, "Idle"), 0);
+  BOOST_REQUIRE_EQUAL(status, "Idle");
 
   cbPreTrigger->write(10);
   cbControl->write(1);
 
   cbStatus->read(status, 50, &gotbytes, &eom);
-  BOOST_REQUIRE_EQUAL(strcmp(status, "Buffer filling"), 0);
+  BOOST_CHECK_EQUAL(status, "Buffer filling");
 
   size_t dims[2] = {2,5};
   NDArray *testArray = arrayPool->alloc(2,dims,NDFloat64,0,NULL);
@@ -140,8 +130,8 @@ BOOST_AUTO_TEST_CASE(test_BufferWrappingAndStatusMessages)
 
   cbCount->read(&storedImages);
   cbStatus->read(status, 50, &gotbytes, &eom);
-  BOOST_REQUIRE_EQUAL(storedImages, 10);
-  BOOST_REQUIRE_EQUAL(strcmp(status, "Buffer Wrapping"), 0);
+  BOOST_CHECK_EQUAL(storedImages, 10);
+  BOOST_CHECK_EQUAL(status, "Buffer Wrapping");
 }
 
 BOOST_AUTO_TEST_CASE(test_OutputCount)
@@ -163,9 +153,7 @@ BOOST_AUTO_TEST_CASE(test_OutputCount)
 
     cbProcess(testArray);
 
-    deque<NDArray *> *arrays = ds->arrays();
-
-    BOOST_REQUIRE_EQUAL(11, arrays->size());
+    BOOST_REQUIRE_EQUAL(11, ds->arrays.size());
 }
 
 BOOST_AUTO_TEST_CASE(test_PreBufferOrder)
@@ -195,13 +183,11 @@ BOOST_AUTO_TEST_CASE(test_PreBufferOrder)
     // call will trigger output to the downstream plugin (i.e. if cb will actually call unlock() at some point).
     cbProcess(testArrays[3]);
 
-    deque<NDArray *> *resultArrays = ds->arrays();
-
     // Check that the arrays have been received in the correct order
-    BOOST_REQUIRE_EQUAL(0, ((uint8_t *)(*resultArrays)[0]->pData)[0]);
-    BOOST_REQUIRE_EQUAL(1, ((uint8_t *)(*resultArrays)[1]->pData)[0]);
-    BOOST_REQUIRE_EQUAL(2, ((uint8_t *)(*resultArrays)[2]->pData)[0]);
-    BOOST_REQUIRE_EQUAL(3, ((uint8_t *)(*resultArrays)[3]->pData)[0]);
+    BOOST_CHECK_EQUAL(0, ((uint8_t *)ds->arrays[0]->pData)[0]);
+    BOOST_CHECK_EQUAL(1, ((uint8_t *)ds->arrays[1]->pData)[0]);
+    BOOST_CHECK_EQUAL(2, ((uint8_t *)ds->arrays[2]->pData)[0]);
+    BOOST_CHECK_EQUAL(3, ((uint8_t *)ds->arrays[3]->pData)[0]);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
