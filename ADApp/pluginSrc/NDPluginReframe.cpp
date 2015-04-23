@@ -41,9 +41,6 @@ static const char *driverName="NDPluginReframe";
 template <typename epicsType>
 bool NDPluginReframe::containsTriggerStart()
 {
-    // ###TODO: This needs to return a bool, and set the triggerOnIndex_ to either the location of
-    // the trigger we found (+1?) or to the end of the array if we found none so the search will
-    // start correctly on the next array.
   int startCondition, nChannels, nSamples, triggerChannel, arrayIndex;
   bool triggerFound = false;
   epicsType *buffer;
@@ -133,9 +130,7 @@ bool NDPluginReframe::containsTriggerStart()
 template <typename epicsType>
 bool NDPluginReframe::containsTriggerEnd()
 {
-    // ###TODO: This needs to return a bool, and set the triggerOffIndex_ to either the location of
-    // the trigger we found (+1?) or to the end of the array if we found none so the search will
-    // start correctly on the next array.
+
     int endCondition, arrayIndex = 0, nChannels, nSamples, triggerChannel, triggerFound = 0;
     epicsType *buffer;
     double threshold;
@@ -223,12 +218,8 @@ bool NDPluginReframe::containsTriggerEnd()
 template <typename epicsType>
 NDArray *NDPluginReframe::constructOutput(Trigger *trig)
 {
-    // ###TODO: This should take a trigger as an argument, and should construct the output for that trigger.
-    // The truncation and carry array construction should now be conditional based on the overlap permitted flag. The truncation will also
-    // need to update all entries in the trigger queue and the search indices accordingly.
-    // Really should handle case where 1st array doesn't contribute, rather than requiring it be pruned.
   int preTriggerCounts, triggerCounts, postTriggerCounts, outputCounts, nChannels, sourceOffset, targetOffset, nSamples=0, carryCounts=0;
-  int preTrigger, postTrigger, arrayCount, overlap;
+  int preTrigger, postTrigger, arrayCount, overlap, ignoredTrigs;
   epicsType *sourceBuffer = NULL, *targetBuffer = NULL, *carryBuffer = NULL;
   NDArray *sourceArray = NULL, *outputArray = NULL, *carryArray = NULL;
 
@@ -239,6 +230,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   getIntegerParam(NDPluginReframePostTriggerSamples, &postTrigger);
   getIntegerParam(NDPluginReframeTriggerTotal, &arrayCount);
   getIntegerParam(NDPluginReframeOverlappingTriggers, &overlap);
+  getIntegerParam(NDPluginReframeIgnoredCount, &ignoredTrigs);
 
   // If no trigger has been detected, don't output anything (will arise if we got a bad input array before seeing any triggers).
   if (trig->startOffset < 0 || arrayBuffer_->empty()) {
@@ -422,22 +414,23 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
           setIntegerParam(NDPluginReframeBufferSamples, 0);
       }
 
-      // ###TODO:
-      // Note we're resetting the trigger index for every step, so we'll just hit the same trigger over and over.
-      // Really there should only ever be at most 1 trigger straddling start of buffer as gates can't overlap.
-      // Also we aren't handling trigger deletion if we do allow overlapping.
       // Triggers will have been shifted if truncation occurred, so check if any are now before the start of the buffer:
       while (!triggerQueue_->empty() && triggerQueue_->front()->startOffset < 0) {
           Trigger *strandedTrig = triggerQueue_->front();
           triggerQueue_->pop_front();
+          ignoredTrigs++;
           // Handling "stranded" triggers is tricky. If both start and end are now behind the start of the array, we can discard the trigger.
           // However if the start is now stranded but the end still falls in relevant data, or if the trigger is still waiting for the end condition,
           // we need to retest to see if the data from the start of the array would still pass the trigger condition. If so, we construct a new trigger
           // and prepend it to the queue.
+          // Note we are resetting the indexes after each trigger, so if more than one trigger is straddling the buffer start we'll wind up searching the
+          // same region twice. We don't currently permit overlapping gates however, so this shouldn't ever occur.
           if (strandedTrig->stopOffset >= 0 || !strandedTrig->done) {
              // Cache the trigger index
              int trigOnCache = triggerOnIndex_;
              int trigOffCache = triggerOffIndex_;
+             triggerOnIndex_=0;
+             triggerOffIndex_=0;
              // Do the test (is there an on condition and does it belong to this trigger?)
              if (containsTriggerStart<epicsType>() && (triggerOnIndex_ <= strandedTrig->stopOffset + 1 || strandedTrig->done)) {
                  Trigger *newTrig = new Trigger;
@@ -445,6 +438,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
                  newTrig->stopOffset = strandedTrig->stopOffset;
                  newTrig->done = strandedTrig->done;
                  triggerQueue_->push_front(newTrig);
+                 ignoredTrigs--;
                  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: Shifting stranded trigger start to %d\n", driverName, functionName, newTrig->startOffset);
              } else {
                  asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: Discarding stranded trigger (end at %d)\n", driverName, functionName, strandedTrig->stopOffset);
@@ -466,6 +460,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   outputArray->uniqueId = arrayCount;
   arrayCount++;
   setIntegerParam(NDPluginReframeTriggerTotal, arrayCount);
+  setIntegerParam(NDPluginReframeIgnoredCount, ignoredTrigs);
 
   asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: Returning output array of size %lu\n", driverName, functionName, outputArray->dims[1].size);
   asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: %d samples still stored in buffer; start index %d, stop index %d\n", driverName, functionName, bufferSizeCounts(0), triggerOnIndex_, triggerOffIndex_);
@@ -499,6 +494,7 @@ int NDPluginReframe::bufferSizeCounts(int start)
     // mean we could expose it as a read-only parameter.
     // On the other hand, the buffer is unlikely to get huge so looking it up each time might not hurt too much.
 }
+
 
 /** Function which checks that incoming NDArrays are consistent in dimension (so we don't end up trying to concatenate arrays with
   * more than 2 dimensions, or with differing numbers of channels).
@@ -563,7 +559,6 @@ void NDPluginReframe::processCallbacks(NDArray *pArray)
 
 void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
 {
-    // ###TODO: Output array construction will be muckier now. We'll need to iterate it over the trigger queue and handle truncation correctly.
     int outputCount;
     const char *functionName = "handleNewArray";
 
@@ -601,7 +596,7 @@ void NDPluginReframe::handleNewArray(NDArray *pArrayCpy)
                 break;
         }
     } else {
-        // either we couldn't copy the array or it failed to validate, so output any triggered data already buffered and reset.
+        // either we couldn't copy the array or else it failed to validate, so output any triggered data already buffered and reset.
         if(arrayBuffer_->size()) {
             while(!triggerQueue_->empty()) {
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Flushing pending triggers due to inconsistent input\n", driverName, functionName);
@@ -665,7 +660,6 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Buffering new array\n", driverName, functionName);
 
     getIntegerParam(NDPluginReframeMaxTriggers, &maxTrigs);
-    getIntegerParam(NDPluginReframeIgnoredCount, &triggersIgnored);
     getIntegerParam(NDPluginReframePostTriggerSamples, &postTrigger);
     getIntegerParam(NDPluginReframePreTriggerSamples, &preTrigger);
     getIntegerParam(NDPluginReframeRearmMode, &rearmMode);
@@ -675,10 +669,12 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 
     arrayBuffer_->push_back(pArrayCpy);
 
+    // Search the new array for triggers
     while (triggerOnIndex_ < bufferSizeCounts(0) || triggerOffIndex_ < bufferSizeCounts(0)) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Searching for trigger\n", driverName, functionName);
 
         if (triggerQueue_->empty() || triggerQueue_->back()->stopOffset >= 0) {
+            // Check for real triggers
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Searching for new trigger start\n", driverName, functionName);
             if (containsTriggerStart<epicsType>()) {
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Trigger start found at %d\n", driverName, functionName, triggerOnIndex_-1);
@@ -690,10 +686,13 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
                     triggerQueue_->push_back(trig);
                 } else {
                     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Ignoring trigger\n", driverName, functionName);
+                    getIntegerParam(NDPluginReframeIgnoredCount, &triggersIgnored);
                     triggersIgnored++;
+                    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
                 }
                 // ###TODO: Soft trigger should probably override real triggers, esp if needed for reframing
             } else if (softTrig) {
+                // Handle soft trigger
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Soft trigger is on\n", driverName, functionName);
                 // Should be OK not to move triggerOnIndex_ in this case, so further real trigs in this array will be detected.
                 if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
@@ -706,13 +705,13 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
                     triggerQueue_->push_back(trig);
                 } else {
                     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Ignoring trigger\n", driverName, functionName);
+                    getIntegerParam(NDPluginReframeIgnoredCount, &triggersIgnored);
                     triggersIgnored++;
+                    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
                 }
             }
         } else {
-            // ###TODO: Nasty gotcha here. This starts counting from the index, which will be 1 count ahead of on trig. This means if on trig sample also
-            // satisfies off trig, we'll miss it.
-            // We can work around this by having triggerOffIndex set to 1 below triggerOnIndex by containsTriggerStart.
+            // Search for trigger end
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Searching for trigger end\n", driverName, functionName);
             if (containsTriggerEnd<epicsType>()) {
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Trigger end found at %d\n", driverName, functionName, triggerOffIndex_-1);
@@ -722,6 +721,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
         }
     }
 
+    // Output any triggers that are now complete
     while (!triggerQueue_->empty() && triggerQueue_->front()->stopOffset >= 0 && (bufferSizeCounts(0) - triggerQueue_->front()->stopOffset >= postTrigger)) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Constructing output for trigger %d, %d\n", driverName, functionName, triggerQueue_->front()->startOffset, triggerQueue_->front()->stopOffset);
         trigCount++;
@@ -738,7 +738,7 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
             outputArray->release();
         }
 
-        // If we've now reached our target # of triggers, clear the trigger queue.
+        // If we've now reached our target # of triggers, clear the trigger queue and disarm.
         if (rearmMode == Single || (rearmMode == Multiple && trigCount >= maxTrigCount)) {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Target trigger # reached, clearing trigger queue (%lu pending)\n", driverName, functionName, triggerQueue_->size());
             while(!triggerQueue_->empty()) {
@@ -753,8 +753,17 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
         }
     }
 
-    // ###TODO: Why is second condition necessary? Should clean up this loop condition hard to understand.
-    while ((!arrayBuffer_->empty() && triggerQueue_->empty() && bufferSizeCounts(1) >= preTrigger) || (!triggerQueue_->empty() && triggerQueue_->front()->startOffset - (int)arrayBuffer_->front()->dims[1].size >= preTrigger)) {
+    // Discard any arrays that cannot contribute to the pre-buffer (either for the current oldest trigger or a future trigger if none are pending).
+    while (!arrayBuffer_->empty()) {
+        int unusedCounts = 0;
+        if (triggerQueue_->empty())
+            unusedCounts = bufferSizeCounts(0) - preTrigger;
+        else
+            unusedCounts = triggerQueue_->front()->startOffset - preTrigger;
+
+        if (unusedCounts < (int)arrayBuffer_->front()->dims[1].size)
+                break;
+
         asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Pruning array buffer (size %lu)\n", driverName, functionName, arrayBuffer_->size());
 
         NDArray *oldArray = arrayBuffer_->front();
@@ -776,7 +785,6 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 
     setIntegerParam(NDPluginReframeTriggerCount, trigCount);
     setIntegerParam(NDPluginReframeOutputCount, trigCount);
-    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
     setIntegerParam(NDPluginReframeBufferedTriggers, triggerQueue_->size());
     setIntegerParam(NDPluginReframeBufferFrames, arrayBuffer_->size());
     setIntegerParam(NDPluginReframeBufferSamples, bufferSizeCounts(0));

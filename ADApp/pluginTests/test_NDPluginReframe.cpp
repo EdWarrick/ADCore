@@ -32,8 +32,6 @@ struct ReframeFixture
     NDPluginReframe *rf;
     NDPluginMock *ds;
 
-    NDPluginROI *roi;
-
     // Mock downstream params
     asynInt32Client *enableCallbacks;
     asynInt32Client *blockingCallbacks;
@@ -49,12 +47,15 @@ struct ReframeFixture
     asynInt32Client *triggerMode;
     asynInt32Client *triggerChannel;
     asynInt32Client *triggerCount;
+    asynInt32Client *ignoredCount;
     asynOctetClient *status;
     asynInt32Client *onCond;
     asynInt32Client *offCond;
     asynFloat64Client *onThresh;
     asynFloat64Client *offThresh;
     asynInt32Client *softTrigger;
+    asynInt32Client *bufferedTrigs;
+    asynInt32Client *overlappingTrigs;
 
     asynInt32Client *counter;
 
@@ -103,22 +104,28 @@ struct ReframeFixture
         triggerMode = new asynInt32Client(testport, 0, NDPluginReframeRearmModeString);
         triggerChannel = new asynInt32Client(testport, 0, NDPluginReframeTriggerChannelString);
         triggerCount = new asynInt32Client(testport, 0, NDPluginReframeTriggerCountString);
+        ignoredCount = new asynInt32Client(testport, 0, NDPluginReframeIgnoredCountString);
         status = new asynOctetClient(testport, 0, NDPluginReframeStatusString);
         onCond = new asynInt32Client(testport, 0, NDPluginReframeTriggerStartConditionString);
         offCond = new asynInt32Client(testport, 0, NDPluginReframeTriggerEndConditionString);
         onThresh = new asynFloat64Client(testport, 0, NDPluginReframeTriggerStartThresholdString);
         offThresh = new asynFloat64Client(testport, 0, NDPluginReframeTriggerEndThresholdString);
+        bufferedTrigs = new asynInt32Client(testport, 0, NDPluginReframeBufferedTriggersString);
+        overlappingTrigs = new asynInt32Client(testport, 0, NDPluginReframeOverlappingTriggersString);
 
 
         testCase++;
     }
     ~ReframeFixture()
     {
+        delete overlappingTrigs;
+        delete bufferedTrigs;
         delete offThresh;
         delete onThresh;
         delete offCond;
         delete onCond;
         delete status;
+        delete ignoredCount;
         delete triggerCount;
         delete triggerChannel;
         delete triggerMode;
@@ -655,6 +662,327 @@ BOOST_AUTO_TEST_CASE(test_IgnoresNonTriggerChannel)
     BOOST_CHECK_EQUAL(trigs, 0);
 }
 
+BOOST_AUTO_TEST_CASE(test_OverlappingTriggersSkipped)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*30] = 2.0;
+    testData[4*45] = 2.0;
+    testData[4*65] = 2.0;
+
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 5);
+}
+
+BOOST_AUTO_TEST_CASE(test_IgnoredCountCorrect)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*20] = 2.0;
+    testData[4*22] = 2.0;
+    testData[4*35] = 2.0;
+    testData[4*65] = 2.0;
+    testData[4*95] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int ignored;
+    ignoredCount->read(&ignored);
+
+    BOOST_CHECK_EQUAL(ignored, 4);
+}
+
+BOOST_AUTO_TEST_CASE(test_BufferedTriggersCount)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*30] = 2.0;
+    testData[4*92] = 2.0;
+    testData[4*95] = 2.0;
+    testData[4*97] = 2.0;
+
+    int initial, pending, final;
+    bufferedTrigs->read(&initial);
+
+    rfProcess(testArray);
+
+    bufferedTrigs->read(&pending);
+    testArray = emptyArray(2, dims);
+
+    rfProcess(testArray);
+
+    bufferedTrigs->read(&final);
+
+    BOOST_CHECK_EQUAL(initial, 0);
+    BOOST_CHECK_EQUAL(pending, 3);
+    BOOST_CHECK_EQUAL(final, 0);
+}
+
+// This to test we aren't missing the 1st sample in a frame if not 1st in the buffer
+BOOST_AUTO_TEST_CASE(test_NarrowTrigAtFrameStart)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[0] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 70);
+}
+
+// This to check we aren't double counting the last sample in a frame.
+BOOST_AUTO_TEST_CASE(test_NarrowTrigAtFrameEnd)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*99] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 71);
+    BOOST_CHECK_EQUAL(pending, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_OverlappingTriggersPermitted)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*10] = 2.0;
+    testData[4*20] = 2.0;
+    testData[4*95] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 5);
+    BOOST_CHECK_EQUAL(counts, 100);
+    BOOST_CHECK_EQUAL(pending, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_TruncationWorksWithPending)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*95] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts, pending;
+
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 4);
+    BOOST_CHECK_EQUAL(counts, 100);
+    BOOST_CHECK_EQUAL(pending, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_SoftTriggerOverridesRealTrigger)
+{
+    BOOST_CHECK_EQUAL(0,1);
+}
+
+// If the trigger off condition is also a trigger on condition, it should be
+// ignored by the trigger on check (otherwise the last sample of the 1st gate would
+// overlap the first sample of the next).
+BOOST_AUTO_TEST_CASE(test_OverlappingTrigOffAndOnHandledCorrectly)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(3.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*30] = 2.0;
+    testData[4*45] = 4.0;
+    testData[4*46] = 4.0;
+
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 2);
+
+    BOOST_CHECK_EQUAL(arrs->at(0)->dims[1].size, 20 + 30 + 15);
+    BOOST_CHECK_EQUAL(arrs->at(1)->dims[1].size, 20 + 30);
+}
+
+BOOST_AUTO_TEST_CASE(test_OverlappingGatesIgnored)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(0);
+    onThresh->write(1.0);
+    offThresh->write(-1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*30] = 2.0;
+    testData[4*45] = -2.0;
+    testData[4*40] = 2.0;
+    testData[4*50] = -2.0;
+
+    rfProcess(testArray);
+
+    int pending;
+    bufferedTrigs->read(&pending);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+
+    NDArray *opArray = arrs->front();
+
+    BOOST_REQUIRE_EQUAL(opArray->dims[1].size, 20+30+15);
+    BOOST_REQUIRE_EQUAL(pending, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_StraddlingTriggerCaught)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(0);
+    onThresh->write(1.0);
+    offThresh->write(-1.0);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*30] = 2.0;
+    testData[4*31] = -2.0;
+    for (int i = 45; i < 65; i++)
+        testData[4*i] = 2.0;
+    testData[4*65] = -2.0;
+
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 5);
+}
+
 BOOST_AUTO_TEST_SUITE_END()
 
 BOOST_FIXTURE_TEST_SUITE(ReframeReframingTests, ReframeFixture)
@@ -875,7 +1203,8 @@ BOOST_AUTO_TEST_CASE(test_ZeroPostTrigger)
 
 BOOST_AUTO_TEST_CASE(test_ZeroPreAndPost)
 {
-    BOOST_REQUIRE(false);
+    BOOST_CHECK(false);
+    return;
     control->write(1);
     preTrigger->write(0);
     postTrigger->write(0);
@@ -1040,6 +1369,45 @@ BOOST_AUTO_TEST_CASE(test_HandlesVariableSampleSizes)
 
     BOOST_CHECK(fabs(pData[0] - 1230.0) < 0.1);
     BOOST_CHECK(fabs(pData[20] - 4050.0) < 0.1);
+}
+
+BOOST_AUTO_TEST_CASE(test_OverlappingTrigsFramedCorrectly)
+{
+    control->write(1);
+    preTrigger->write(10);
+    postTrigger->write(10);
+    onCond->write(0);
+    offCond->write(0);
+    onThresh->write(-1.0);
+    offThresh->write(-1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {1, 50};
+    NDArray *testArray = incrementArray(2, dims, 0);
+    double *pData = (double *)testArray->pData;
+
+    pData[7] = -2.0;
+    pData[10] = -2.0;
+    pData[13] = -2.0;
+    pData[49] = -2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 7);
+    double *pData0, *pData1, *pData2, *pData3, *pData4;
+    pData0 = (double *)arrs->at(0)->pData;
+    pData1 = (double *)arrs->at(1)->pData;
+    pData2 = (double *)arrs->at(2)->pData;
+    pData3 = (double *)arrs->at(3)->pData;
+    pData4 = (double *)arrs->at(4)->pData;
+
+    BOOST_CHECK(fabs(pData0[0] - pData1[0]) < 0.1);
+    BOOST_CHECK(fabs(pData1[12] - pData2[9]) < 0.1);
+    BOOST_CHECK(fabs(pData3[8] - pData4[0]) < 0.1);
+    BOOST_CHECK(fabs(pData3[12] - pData4[4]) < 0.1);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
