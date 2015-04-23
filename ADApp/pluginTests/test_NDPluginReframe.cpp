@@ -66,6 +66,7 @@ struct ReframeFixture
         arrayPool = new NDArrayPool(100, 0);
         arrays = new vector<NDArray *>;
 
+
         // Asyn manager doesn't like it if we try to reuse the same port name for multiple drivers (even if only one is ever instantiated at once), so
         // change it slightly for each test case.
         char simport[50], testport[50], dsport[50];
@@ -776,6 +777,7 @@ BOOST_AUTO_TEST_CASE(test_DataOrderPreserved)
     onThresh->write(1001.0);
     offThresh->write(1011.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {5, 30};
 
@@ -820,6 +822,7 @@ BOOST_AUTO_TEST_CASE(test_ZeroPreTrigger)
     onThresh->write(25.0);
     offThresh->write(25.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {2, 20};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -849,6 +852,7 @@ BOOST_AUTO_TEST_CASE(test_ZeroPostTrigger)
     onThresh->write(75.0);
     offThresh->write(75.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {3, 30};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -880,6 +884,7 @@ BOOST_AUTO_TEST_CASE(test_ZeroPreAndPost)
     onThresh->write(75.0);
     offThresh->write(75.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {3, 30};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -904,6 +909,7 @@ BOOST_AUTO_TEST_CASE(test_PreTriggerOnBufferStart)
     onThresh->write(1900.0);
     offThresh->write(1900.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray1 = incrementArray(2, dims, 0);
@@ -938,6 +944,7 @@ BOOST_AUTO_TEST_CASE(test_WindowAlignedWithFrameBoundary)
     onThresh->write(1900.0);
     offThresh->write(2010.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray1 = incrementArray(2, dims, 0);
@@ -976,6 +983,7 @@ BOOST_AUTO_TEST_CASE(test_PreTriggerTruncation)
     onThresh->write(5.0);
     offThresh->write(5.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {3, 10};
     NDArray *testArray1 = incrementArray(2, dims, 0);
@@ -1001,6 +1009,7 @@ BOOST_AUTO_TEST_CASE(test_HandlesVariableSampleSizes)
     onThresh->write(3015.0);
     offThresh->write(3025.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray1 = incrementArray(2, dims, 0);
@@ -1080,6 +1089,7 @@ BOOST_AUTO_TEST_CASE(test_HandlesMissingCarryBuffer)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -1124,6 +1134,7 @@ BOOST_AUTO_TEST_CASE(test_WrongNDims)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -1155,6 +1166,7 @@ BOOST_AUTO_TEST_CASE(test_InconsistentChannelNum)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
 
     size_t dims[2] = {1, 5};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -1186,6 +1198,7 @@ BOOST_AUTO_TEST_CASE(test_NoTriggerChannel)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
     triggerChannel->write(5);
 
     size_t dims[2] = {1, 5};
@@ -1212,6 +1225,8 @@ BOOST_AUTO_TEST_CASE(test_WrongDataType)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
+
 
     size_t dims[2] = {1, 5};
     NDArray *testArray = incrementArray(2, dims, 0);
@@ -1243,6 +1258,8 @@ BOOST_AUTO_TEST_CASE(test_HandlesUInt8)
     onThresh->write(100.0);
     offThresh->write(100.0);
     triggerMax->write(1.0);
+    triggerMode->write(0);
+
 
     size_t dims[2] = {3,20};
     NDArray *testArray = arrayPool->alloc(2, dims, NDUInt8, 0, NULL);
