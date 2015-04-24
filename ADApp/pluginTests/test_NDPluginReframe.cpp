@@ -883,7 +883,36 @@ BOOST_AUTO_TEST_CASE(test_TruncationWorksWithPending)
 
 BOOST_AUTO_TEST_CASE(test_SoftTriggerOverridesRealTrigger)
 {
-    BOOST_CHECK_EQUAL(0,1);
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    softTrigger->write(1);
+
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {4,100};
+    NDArray *testArray = emptyArray(2, dims);
+    double *testData = (double *)testArray->pData;
+
+    testData[4*10] = 2.0;
+    testData[4*20] = 2.0;
+    testData[4*95] = 2.0;
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, pending;
+
+    triggerCount->read(&trigs);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 3);
+    BOOST_CHECK_EQUAL(pending, 0);
 }
 
 // If the trigger off condition is also a trigger on condition, it should be

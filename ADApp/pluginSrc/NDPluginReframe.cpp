@@ -676,24 +676,13 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
         if (triggerQueue_->empty() || triggerQueue_->back()->stopOffset >= 0) {
             // Check for real triggers
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Searching for new trigger start\n", driverName, functionName);
-            if (containsTriggerStart<epicsType>()) {
-                asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Trigger start found at %d\n", driverName, functionName, triggerOnIndex_-1);
-                if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
-                    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Adding trigger to queue\n", driverName, functionName);
-                    Trigger *trig = new Trigger;
-                    trig->startOffset = triggerOnIndex_-1;
-                    trig->stopOffset = -1;
-                    triggerQueue_->push_back(trig);
-                } else {
-                    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Ignoring trigger\n", driverName, functionName);
-                    getIntegerParam(NDPluginReframeIgnoredCount, &triggersIgnored);
-                    triggersIgnored++;
-                    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
-                }
-                // ###TODO: Soft trigger should probably override real triggers, esp if needed for reframing
-            } else if (softTrig) {
-                // Handle soft trigger
+            if (softTrig) {
+                // Handle soft trigger; this overrides any hardware triggers.
                 asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Soft trigger is on\n", driverName, functionName);
+                // Advance the indexes so we skip the hardware trigger search
+                triggerOnIndex_ = bufferSizeCounts(0);
+                triggerOffIndex_ = bufferSizeCounts(0);
+
                 // Should be OK not to move triggerOnIndex_ in this case, so further real trigs in this array will be detected.
                 if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
                     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Adding trigger to queue\n", driverName, functionName);
@@ -702,6 +691,20 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
                     trig->startOffset = bufferSizeCounts(0) - arrayBuffer_->back()->dims[1].size;
                     trig->stopOffset = bufferSizeCounts(0) - arrayBuffer_->back()->dims[1].size;
                     trig->done = true;
+                    triggerQueue_->push_back(trig);
+                } else {
+                    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Ignoring trigger\n", driverName, functionName);
+                    getIntegerParam(NDPluginReframeIgnoredCount, &triggersIgnored);
+                    triggersIgnored++;
+                    setIntegerParam(NDPluginReframeIgnoredCount, triggersIgnored);
+                }
+            } else if (containsTriggerStart<epicsType>()) {
+                asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Trigger start found at %d\n", driverName, functionName, triggerOnIndex_-1);
+                if (!maxTrigs || (maxTrigs > 0 && triggerQueue_->size() < (size_t)maxTrigs)) {
+                    asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Adding trigger to queue\n", driverName, functionName);
+                    Trigger *trig = new Trigger;
+                    trig->startOffset = triggerOnIndex_-1;
+                    trig->stopOffset = -1;
                     triggerQueue_->push_back(trig);
                 } else {
                     asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Ignoring trigger\n", driverName, functionName);
