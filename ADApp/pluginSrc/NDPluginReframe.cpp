@@ -829,6 +829,7 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
             // Set the status to buffer filling and clear any residual state current/last trigger
             setIntegerParam(NDPluginReframeSoftTrigger, 0);
             setIntegerParam(NDPluginReframeTriggerCount, 0);
+            setIntegerParam(NDPluginReframeIgnoredCount, 0);
             setIntegerParam(NDPluginReframeTriggerEnded, 0);
             setIntegerParam(NDPluginReframeBufferFrames, 0);
             setIntegerParam(NDPluginReframeBufferSamples, 0);

@@ -3,7 +3,7 @@ beginScreenProperties
 major 4
 minor 0
 release 1
-x 651
+x 653
 y 231
 w 390
 h 820
@@ -910,5 +910,44 @@ endGroup
 visPv "$(P)$(R)TriggerMode"
 visMin "1"
 visMax "2"
+endObjectProperties
+
+# (Static Text)
+object activeXTextClass
+beginObjectProperties
+major 4
+minor 1
+release 1
+x 210
+y 410
+w 90
+h 20
+font "arial-bold-r-12.0"
+fgColor index 14
+bgColor index 3
+useDisplayBg
+value {
+  "Permit Overlap"
+}
+endObjectProperties
+
+# (Menu Button)
+object activeMenuButtonClass
+beginObjectProperties
+major 4
+minor 0
+release 0
+x 305
+y 405
+w 70
+h 25
+fgColor index 25
+bgColor index 3
+inconsistentColor index 3
+topShadowColor index 1
+botShadowColor index 11
+controlPv "$(P)$(R)PermitOverlap"
+indicatorPv "$(P)$(R)PermitOverlap"
+font "arial-bold-r-12.0"
 endObjectProperties
 
