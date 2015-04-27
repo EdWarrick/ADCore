@@ -309,7 +309,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   targetBuffer = (epicsType *)outputArray->pData;
 
   // Copy the attributes and timestamp from the first array.
-  outputArray->pAttributeList->copy(firstArray->pAttributeList);
+  firstArray->pAttributeList->copy(outputArray->pAttributeList);
   outputArray->timeStamp = firstArray->timeStamp;
   outputArray->epicsTS = firstArray->epicsTS;
 
@@ -362,7 +362,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
           else if(typeid(epicsType) == typeid(epicsFloat64))
               carryArray = this->pNDArrayPool->alloc(2, carryDims, NDFloat64, 0, NULL);
 
-          carryArray->pAttributeList->copy(sourceArray->pAttributeList);
+          sourceArray->pAttributeList->copy(carryArray->pAttributeList);
           carryArray->timeStamp = sourceArray->timeStamp;
           carryArray->epicsTS = sourceArray->epicsTS;
 

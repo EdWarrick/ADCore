@@ -1504,17 +1504,114 @@ BOOST_FIXTURE_TEST_SUITE(ReframeAttributeTests, ReframeFixture)
 
 BOOST_AUTO_TEST_CASE(test_AttributesFromFirstArray)
 {
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(10);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(-1.0);
+    offThresh->write(-1.0);
 
+    size_t dims[2] = {1, 3};
+    NDArray *arr1 = emptyArray(2, dims);
+    NDArray *arr2 = emptyArray(2, dims);
+    NDArray *arr3 = emptyArray(2, dims);
+
+    int at1 = 437;
+    int at2 = 3;
+    int at3 = 999999;
+
+    arr1->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at1);
+    arr2->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at2);
+    arr3->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at3);
+
+    rfProcess(arr1);
+    rfProcess(arr2);
+    rfProcess(arr3);
+    rfProcess(arr3);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 1);
+
+    NDArray *opArray = arrs->back();
+    int val;
+    NDAttribute *opAttr = opArray->pAttributeList->find("TestAttribute");
+    BOOST_REQUIRE(opAttr);
+    opAttr->getValue(NDAttrInt32, &val, 1);
+    BOOST_CHECK_EQUAL(val, at1);
 }
 
 BOOST_AUTO_TEST_CASE(test_AttributesFromCarryArray)
 {
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(3);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(-1.0);
+    offThresh->write(-1.0);
+    triggerMax->write(0.0);
 
+    size_t dims[2] = {1, 5};
+    NDArray *arr1 = emptyArray(2, dims);
+    NDArray *arr2 = emptyArray(2, dims);
+    NDArray *arr3 = emptyArray(2, dims);
+
+    int at1 = 437;
+    int at2 = 3;
+    int at3 = 999999;
+
+    arr1->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at1);
+    arr2->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at2);
+    arr3->pAttributeList->add("TestAttribute", "", NDAttrInt32, &at3);
+
+    rfProcess(arr1);
+    rfProcess(arr2);
+    rfProcess(arr3);
+    rfProcess(arr3);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 6);
+
+    NDArray *opArray = arrs->at(3);
+    int val;
+    NDAttribute *opAttr = opArray->pAttributeList->find("TestAttribute");
+    BOOST_REQUIRE(opAttr);
+    opAttr->getValue(NDAttrInt32, &val, 1);
+    BOOST_CHECK_EQUAL(val, at2);
 }
 
 BOOST_AUTO_TEST_CASE(test_TimestampCorrect)
 {
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(7);
+    onCond->write(1);
+    offCond->write(1);
+    onThresh->write(-1.0);
+    offThresh->write(-1.0);
+    triggerMax->write(0.0);
 
+    size_t dims[2] = {1, 5};
+    NDArray *arr1 = emptyArray(2, dims);
+    NDArray *arr2 = emptyArray(2, dims);
+    NDArray *arr3 = emptyArray(2, dims);
+
+    rfProcess(arr1);
+    rfProcess(arr2);
+    rfProcess(arr3);
+    rfProcess(arr3);
+
+    deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_REQUIRE_EQUAL(arrs->size(), 2);
+
+    BOOST_CHECK(fabs(arrs->front()->timeStamp - arr1->timeStamp) < 0.01);
+    //BOOST_CHECK_EQUAL(arrs->front()->epicsTS, arr1->epicsTS);
+    BOOST_CHECK(fabs(arrs->back()->timeStamp - arr2->timeStamp) < 0.01);
+    //BOOST_CHECK_EQUAL(arrs->back()->epicsTS, arr2->epicsTS);
 }
 
 BOOST_AUTO_TEST_SUITE_END()
