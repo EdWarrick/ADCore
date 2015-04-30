@@ -11,8 +11,6 @@
 typedef enum NDPluginReframeMode {
     Idle,
     Armed,
-    Gating,
-    Acquiring
 } NDPluginReframeMode;
 
 typedef enum NDPluginRearmMode {
@@ -20,6 +18,17 @@ typedef enum NDPluginRearmMode {
     Multiple,
     Continuous
 } NDPluginRearmMode;
+
+typedef enum NDPluginTriggerMode {
+    BelowThreshold,
+    AboveThreshold,
+    RisingEdge,
+    FallingEdge,
+    AlwaysOn,
+    AlwaysOff,
+} NDPluginTriggerMode;
+
+
 
 struct Trigger {
     Trigger() : startOffset(-1), stopOffset(-1), done(false) {}
@@ -115,6 +124,8 @@ private:
     std::deque<Trigger *> *triggerQueue_;
     int triggerOnIndex_;
     int triggerOffIndex_;
+    bool triggerOnArmed_; // Latches on low/high val for rising/falling trigger (so if next sample is high/low, it will be an edge).
+    bool triggerOffArmed_;
 };
 #define NUM_NDPLUGIN_REFRAME_PARAMS ((int)(&LAST_NDPLUGIN_REFRAME_PARAM - &FIRST_NDPLUGIN_REFRAME_PARAM + 1))
 

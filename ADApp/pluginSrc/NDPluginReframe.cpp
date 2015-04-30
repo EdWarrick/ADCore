@@ -86,7 +86,7 @@ bool NDPluginReframe::containsTriggerStart()
 
           epicsType triggerVal = buffer[sample * nChannels + triggerChannel];
 
-          if (startCondition) { // Trigger on high level
+          if (startCondition == AboveThreshold) { // Trigger on high level
               if (triggerVal > static_cast<epicsType>(threshold)) {
                   // Off index should point to this sample, on index should point to the next.
                   // This is so that the next trigger search start will start from the next sample, but we won't miss cases
@@ -96,13 +96,42 @@ bool NDPluginReframe::containsTriggerStart()
                   triggerFound = true;
                   break;
               }
-          } else { // Trigger on low level
+          } else if (startCondition == BelowThreshold) { // Trigger on low level
               if (triggerVal < static_cast<epicsType>(threshold)) {
                   triggerOnIndex_ = arrayOffset + sample + 1;
                   triggerOffIndex_ = arrayOffset + sample;
                   triggerFound = true;
                   break;
               }
+          } else if (startCondition == RisingEdge) {
+              if (!triggerOnArmed_) {
+                  if (triggerVal <= static_cast<epicsType>(threshold))
+                      triggerOnArmed_ = true;
+              } else if (triggerVal > static_cast<epicsType>(threshold)) {
+                  triggerOnIndex_ = arrayOffset + sample + 1;
+                  triggerOffIndex_ = arrayOffset + sample;
+                  triggerFound = true;
+                  triggerOnArmed_ = false;
+                  break;
+              }
+          } else if (startCondition == FallingEdge) {
+              if (!triggerOnArmed_) {
+                  if (triggerVal >= static_cast<epicsType>(threshold))
+                      triggerOnArmed_ = true;
+              } else if (triggerVal < static_cast<epicsType>(threshold)) {
+                  triggerOnIndex_ = arrayOffset + sample + 1;
+                  triggerOffIndex_ = arrayOffset + sample;
+                  triggerFound = true;
+                  triggerOnArmed_ = false;
+                  break;
+              }
+          } else if (startCondition == AlwaysOn) {
+              triggerOnIndex_ = arrayOffset + sample + 1;
+              triggerOffIndex_ = arrayOffset + sample;
+              triggerFound = true;
+              break;
+          } else if (startCondition == AlwaysOff) {
+              continue;
           }
       }
 
@@ -175,7 +204,7 @@ bool NDPluginReframe::containsTriggerEnd()
 
             epicsType triggerVal = buffer[sample * nChannels + triggerChannel];
 
-            if (endCondition) { // Trigger on high level
+            if (endCondition == AboveThreshold) { // Trigger on high level
                 if (triggerVal > static_cast<epicsType>(threshold)) {
                     // We don't allow overlapping gates, so increment triggerOnIndex_ as well.
                     triggerOffIndex_ = arrayOffset + sample + 1;
@@ -183,13 +212,42 @@ bool NDPluginReframe::containsTriggerEnd()
                     triggerFound = true;
                     break;
                 }
-            } else { // Trigger on low level
+            } else if (endCondition == BelowThreshold) { // Trigger on low level
                 if (triggerVal < static_cast<epicsType>(threshold)) {
                     triggerOffIndex_ = arrayOffset + sample + 1;
                     triggerOnIndex_ = arrayOffset + sample + 1;
                     triggerFound = true;
                     break;
                 }
+            } else if (endCondition == RisingEdge) {
+                if (!triggerOffArmed_) {
+                    if (triggerVal <= static_cast<epicsType>(threshold))
+                        triggerOffArmed_ = true;
+                } else if (triggerVal > static_cast<epicsType>(threshold)) {
+                    triggerOnIndex_ = arrayOffset + sample;
+                    triggerOffIndex_ = arrayOffset + sample + 1;
+                    triggerFound = true;
+                    triggerOffArmed_ = false;
+                    break;
+                }
+            } else if (endCondition == FallingEdge) {
+                if (!triggerOffArmed_) {
+                    if (triggerVal >= static_cast<epicsType>(threshold))
+                        triggerOffArmed_ = true;
+                } else if (triggerVal < static_cast<epicsType>(threshold)) {
+                    triggerOnIndex_ = arrayOffset + sample;
+                    triggerOffIndex_ = arrayOffset + sample + 1;
+                    triggerFound = true;
+                    triggerOffArmed_ = false;
+                    break;
+                }
+            } else if (endCondition == AlwaysOn) {
+                triggerOnIndex_ = arrayOffset + sample + 1;
+                triggerOffIndex_ = arrayOffset + sample + 1;
+                triggerFound = true;
+                break;
+            } else if (endCondition == AlwaysOff) {
+                continue;
             }
         }
         if (triggerFound)
@@ -391,8 +449,8 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
           arrayBuffer_->pop_front();
 
           // Update the indices and offsets for each trigger to reflect the moved start of the buffer
-          triggerOnIndex_ = MAX(triggerOnIndex_ - (int)size, -1);
-          triggerOffIndex_ = MAX(triggerOffIndex_ - (int)size, -1);
+          triggerOnIndex_ = MAX(triggerOnIndex_ - (int)size, 0);
+          triggerOffIndex_ = MAX(triggerOffIndex_ - (int)size, 0);
 
           std::deque<Trigger *>::iterator iter;
           for (iter = triggerQueue_->begin(); iter != triggerQueue_->end(); iter++) {
@@ -774,10 +832,12 @@ void NDPluginReframe::handleNewArrayT(NDArray *pArrayCpy)
 
         arrayBuffer_->pop_front();
         oldArray->release();
-        triggerOnIndex_ = MAX(triggerOnIndex_ - (int)size, -1);
-        triggerOffIndex_ = MAX(triggerOffIndex_ - (int)size, -1);
+        triggerOnIndex_ = MAX(triggerOnIndex_ - (int)size, 0);
+        triggerOffIndex_ = MAX(triggerOffIndex_ - (int)size, 0);
 
         // Update the trigger offsets to reflect the moved buffer start
+        // ###TODO: Any triggers which are now stranded before the start of the buffer should have been pruned by the truncation code if we're
+        // using truncation, or else should never occur - so this is an error condition, which we probably shouldn't silently ignore.
         std::deque<Trigger *>::iterator iter;
         for (iter = triggerQueue_->begin(); iter != triggerQueue_->end(); iter++) {
             Trigger *trig = *iter;
@@ -806,6 +866,7 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
     // It should also clear the trigger buffer if the trigger conditions change.
     //   Should it? Can't we just handle this case?
     //   It does muck up truncation, since we need to re-test for triggers sometimes and we don't store the condition we used.
+    // Note changing trigger conditions should probably reset edge latch too.
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
     static const char *functionName = "writeInt32";
@@ -840,19 +901,26 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
             setIntegerParam(NDPluginReframeMode, Armed);
 
             setIntegerParam(NDPluginReframeBufferedTriggers, 0);
+            triggerOnArmed_ = false;
+            triggerOffArmed_ = false;
         } else {
             asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s, %s: Disarming plugin\n", driverName, functionName);
             setStringParam(NDPluginReframeStatus, "Idle");
             setIntegerParam(NDPluginReframeMode, Idle);
         }
-    } else {
-        // Set the parameter in the parameter library.
-        status = (asynStatus) setIntegerParam(function, value);
-
-        // If this parameter belongs to a base class call its method
-        if (function < FIRST_NDPLUGIN_REFRAME_PARAM)
-            status = NDPluginDriver::writeInt32(pasynUser, value);
+    } else if (function == NDPluginReframeTriggerStartCondition) {
+        triggerOnArmed_ = false;
+    } else if (function == NDPluginReframeTriggerEndCondition) {
+        triggerOffArmed_ = false;
     }
+
+    // Set the parameter in the parameter library.
+    status = (asynStatus) setIntegerParam(function, value);
+
+    // If this parameter belongs to a base class call its method
+    if (function < FIRST_NDPLUGIN_REFRAME_PARAM)
+        status = NDPluginDriver::writeInt32(pasynUser, value);
+
 
     // Do callbacks so higher layers see any changes
     status = (asynStatus) callParamCallbacks();
@@ -907,8 +975,10 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
 
     arrayBuffer_ = NULL;
     triggerQueue_ = NULL;
-    triggerOnIndex_ = -1;
-    triggerOffIndex_ = -1;
+    triggerOnIndex_ = 0;
+    triggerOffIndex_ = 0;
+    triggerOnArmed_ = false;
+    triggerOffArmed_ = false;
     // General
     createParam(NDPluginReframeControlString,               asynParamInt32,   &NDPluginReframeControl);
     createParam(NDPluginReframeStatusString,                asynParamOctet,   &NDPluginReframeStatus);
@@ -950,8 +1020,8 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     setIntegerParam(NDPluginReframePreTriggerSamples, 100);
     setIntegerParam(NDPluginReframePostTriggerSamples, 100);
 
-    setIntegerParam(NDPluginReframeTriggerStartCondition, 1);
-    setIntegerParam(NDPluginReframeTriggerEndCondition, 0);
+    setIntegerParam(NDPluginReframeTriggerStartCondition, AboveThreshold);
+    setIntegerParam(NDPluginReframeTriggerEndCondition, BelowThreshold);
 
     setDoubleParam(NDPluginReframeTriggerStartThreshold, 1.0);
     setDoubleParam(NDPluginReframeTriggerEndThreshold, 0.0);

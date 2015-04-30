@@ -20,6 +20,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <math.h>
+#include <float.h>
 #include <deque>
 
 #include <epicsTypes.h>
@@ -597,16 +598,64 @@ BOOST_AUTO_TEST_CASE(test_IndefiniteTrigger)
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOn)
 {
-    // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
-    // bit hacky and probably relies on undefined behaviour.
-    BOOST_CHECK(false);
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(1);
+    onCond->write(AlwaysOn);
+    offCond->write(AlwaysOn);
+    triggerMode->write(Continuous);
+
+    size_t dims[2] = {4, 5};
+    NDArray *testArray = emptyArray(2, dims);
+    double *pData = (double *)testArray->pData;
+    pData[0] = DBL_MAX;
+    pData[4*1] = DBL_MIN;
+    pData[4*2] = 1.0;
+    pData[4*3] = 0.0;
+    pData[4*4] = -4.523e32;
+
+    rfProcess(testArray);
+
+    int trigs, pending, stored;
+
+    triggerCount->read(&trigs);
+    storedFrames->read(&stored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 5);
+    BOOST_CHECK_EQUAL(stored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
 }
 
 BOOST_AUTO_TEST_CASE(test_CanGuaranteeTriggerOff)
 {
-    // Can't do this at present - data is double precision test is > or < - not possible to guarantee (other than possibly using DOUBLE_MIN, but that's a
-    // bit hacky and probably relies on undefined behaviour.
-    BOOST_CHECK(false);
+    control->write(1);
+    preTrigger->write(1);
+    postTrigger->write(1);
+    onCond->write(AlwaysOff);
+    offCond->write(AlwaysOff);
+    triggerMode->write(Continuous);
+
+    size_t dims[2] = {4, 5};
+    NDArray *testArray = emptyArray(2, dims);
+    double *pData = (double *)testArray->pData;
+    pData[0] = DBL_MAX;
+    pData[4*1] = DBL_MIN;
+    pData[4*2] = 1.0;
+    pData[4*3] = 0.0;
+    pData[4*4] = -4.523e32;
+
+    rfProcess(testArray);
+
+    int trigs, pending, stored;
+
+    triggerCount->read(&trigs);
+    storedFrames->read(&stored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 0);
+    BOOST_CHECK_EQUAL(stored, 1);
+    BOOST_CHECK_EQUAL(pending, 0);
 }
 
 BOOST_AUTO_TEST_CASE(test_NonZeroTriggerChannel)
@@ -1010,6 +1059,569 @@ BOOST_AUTO_TEST_CASE(test_StraddlingTriggerCaught)
 
     BOOST_CHECK_EQUAL(trigs, 2);
     BOOST_CHECK_EQUAL(counts, 5);
+}
+
+BOOST_AUTO_TEST_SUITE_END()
+
+BOOST_FIXTURE_TEST_SUITE(ReframeEdgeTriggeringTests, ReframeFixture)
+
+
+BOOST_AUTO_TEST_CASE(test_EdgeInitialHighDoesntTrigger)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(RisingEdge);
+    offCond->write(AlwaysOn);
+    onThresh->write(1.0);
+    offThresh->write(-1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = constantArray(2, dims, 2.0);
+
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 0);
+    BOOST_CHECK_EQUAL(counts, 200);
+}
+
+BOOST_AUTO_TEST_CASE(test_SimpleRisingEdgeWorks)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(RisingEdge);
+    offCond->write(AlwaysOn);
+    onThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    data[3*10] = 2.0;
+
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 1);
+    BOOST_CHECK_EQUAL(counts, 160);
+}
+
+BOOST_AUTO_TEST_CASE(test_SimpleFallingEdgeWorks)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(FallingEdge);
+    offCond->write(AlwaysOn);
+    onThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = constantArray(2, dims, 2.0);
+    double *data = (double *)testArray->pData;
+
+    data[3*20] = 0.0;
+
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 1);
+    BOOST_CHECK_EQUAL(counts, 150);
+}
+
+BOOST_AUTO_TEST_CASE(test_RisingFalling)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    for (int i = 20; i < 30; i++) {
+        data[3*i] = 2.0;
+    }
+
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 1);
+    BOOST_CHECK_EQUAL(counts, 140);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_FallingRising)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(FallingEdge);
+    offCond->write(RisingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = constantArray(2, dims, 2.0);
+    double *data = (double *)testArray->pData;
+
+    for (int i = 20; i < 30; i++) {
+        data[3*i] = 0.0;
+    }
+
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 1);
+    BOOST_CHECK_EQUAL(counts, 140);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
+
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeLongPulseNotDuplicated)
+{
+    control->write(1);
+    preTrigger->write(20);
+    postTrigger->write(30);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    overlappingTrigs->write(1);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    for (int i = 20; i < 30; i++) {
+        data[3*i] = 2.0;
+    }
+
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 1);
+    BOOST_CHECK_EQUAL(counts, 200);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_NarrowPulsesWork)
+{
+    control->write(1);
+    preTrigger->write(5);
+    postTrigger->write(5);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+
+    data[3*20] = 2.0;
+    data[3*40] = 2.0;
+    data[3*80] = 2.0;
+
+
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 3);
+    BOOST_CHECK_EQUAL(counts, 114);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_AdjacentPulsesWork)
+{
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(1);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 200};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+
+    for (int i = 10; i < 15; i++) {
+        data[3*2*i] = 2.0;
+    }
+
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 5);
+    BOOST_CHECK_EQUAL(counts, 0);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
+}
+
+BOOST_AUTO_TEST_CASE(test_AdjacentPulsesMultiArray)
+{
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(0);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 6};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+
+    for (int i = 0; i < 3; i++) {
+        data[3*(2*i+1)] = 2.0;
+    }
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 8);
+    BOOST_CHECK_EQUAL(counts, 2);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_MixedEdgeAndLevelWorks)
+{
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(0);
+    onCond->write(RisingEdge);
+    offCond->write(BelowThreshold);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 6};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+
+    for (int i = 0; i < 3; i++) {
+        data[3*(2*i+1)] = 2.0;
+    }
+
+    rfProcess(testArray);
+    rfProcess(testArray);
+    rfProcess(testArray);
+
+    int trigs, counts, ignored, pending;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&pending);
+
+    BOOST_CHECK_EQUAL(trigs, 8);
+    BOOST_CHECK_EQUAL(counts, 2);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 1);
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeWindowSizeCorrect)
+{
+    control->write(1);
+    preTrigger->write(0);
+    postTrigger->write(0);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray1 = emptyArray(2, dims);
+    double *data = (double *)testArray1->pData;
+
+
+    for (int i = 0; i < 3; i++) {
+        data[3*(2*i+1)] = 2.0;
+    }
+
+    data[3*18] = 2.0;
+    data[3*19] = 2.0;
+
+    NDArray *testArray2 = constantArray(2, dims, 2.0);
+    data = (double *)testArray2->pData;
+    data[3*18] = 0.0;
+    data[3*19] = 0.0;
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+
+    std::deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_CHECK_EQUAL(arrs->size(), 4);
+
+    NDArray *arr1 = arrs->front();
+    NDArray *arr4 = arrs->back();
+
+    BOOST_CHECK_EQUAL(arr1->dims[1].size, 1);
+    BOOST_CHECK_EQUAL(arr4->dims[1].size, 20);
+
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeWindowWithPreAndPost)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray1 = emptyArray(2, dims);
+    double *data = (double *)testArray1->pData;
+
+
+
+    data[3*4] = 2.0;
+
+
+    data[3*18] = 2.0;
+    data[3*19] = 2.0;
+
+    NDArray *testArray2 = constantArray(2, dims, 2.0);
+    data = (double *)testArray2->pData;
+    data[3*18] = 0.0;
+    data[3*19] = 0.0;
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+
+    std::deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_CHECK_EQUAL(arrs->size(), 2);
+
+    NDArray *arr1 = arrs->front();
+    NDArray *arr4 = arrs->back();
+
+    BOOST_CHECK_EQUAL(arr1->dims[1].size, 6);
+    BOOST_CHECK_EQUAL(arr4->dims[1].size, 25);
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeDataLayoutCorrect)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray1 = emptyArray(2, dims);
+    double *data = (double *)testArray1->pData;
+
+    data[3*4] = 2.0;
+    data[3*18] = 2.0;
+    data[3*19] = 2.0;
+
+    NDArray *testArray2 = constantArray(2, dims, 2.0);
+    data = (double *)testArray2->pData;
+    data[3*18] = 0.0;
+    data[3*19] = 0.0;
+
+    rfProcess(testArray1);
+    rfProcess(testArray2);
+
+    std::deque<NDArray *> *arrs = ds->arrays();
+
+    BOOST_CHECK_EQUAL(arrs->size(), 2);
+
+    NDArray *arr1 = arrs->front();
+    NDArray *arr4 = arrs->back();
+    data = (double *)arr1->pData;
+
+    BOOST_CHECK_LT(fabs(data[3*3] - 2.0), 0.01);
+
+    data = (double *)arr4->pData;
+
+    BOOST_CHECK_LT(fabs(data[3*2] - 0.0), 0.01);
+    BOOST_CHECK_LT(fabs(data[3*3] - 2.0), 0.01);
+    BOOST_CHECK_LT(fabs(data[3*22] - 2.0), 0.01);
+    BOOST_CHECK_LT(fabs(data[3*23] - 0.0), 0.01);
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeOnArrayBoundaryWorks)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    // Needed so that the second trig will still be on boundary when we construct it.
+    overlappingTrigs->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    data[3*19] = 2.0;
+    rfProcess(testArray);
+    data[3*19] = 0.0;
+    rfProcess(testArray);
+    data[0] = 2.0;
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 20);
+}
+
+BOOST_AUTO_TEST_CASE(test_AlwaysOnArrayBoundaryWorks)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(AlwaysOn);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+    // Needed so that the second trig will still be on boundary when we construct it.
+    overlappingTrigs->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    data[3*19] = 2.0;
+    rfProcess(testArray);
+    data[3*19] = 0.0;
+    rfProcess(testArray);
+    data[0] = 2.0;
+    rfProcess(testArray);
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 2);
+    BOOST_CHECK_EQUAL(counts, 20);
+}
+
+BOOST_AUTO_TEST_CASE(test_EdgeOnTruncationBoundaryWorks)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(FallingEdge);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = emptyArray(2, dims);
+    double *data = (double *)testArray->pData;
+
+    data[3*5] = 2.0;
+    data[3*8] = 2.0;
+    data[3*11] = 2.0;
+    rfProcess(testArray);
+
+
+    int trigs, counts;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+
+    BOOST_CHECK_EQUAL(trigs, 3);
+    BOOST_CHECK_EQUAL(counts, 6);
+}
+
+// Plugin has class variable to check whether sample above threshold is
+// edge or just high level. This should be reset when we change the trigger
+// condition.
+BOOST_AUTO_TEST_CASE(test_EdgeLatchOnTriggerChangeFixed)
+{
+    control->write(1);
+    preTrigger->write(3);
+    postTrigger->write(2);
+    onCond->write(RisingEdge);
+    offCond->write(AlwaysOn);
+    onThresh->write(1.0);
+    offThresh->write(1.0);
+
+    size_t dims[2] = {3, 20};
+    NDArray *testArray = emptyArray(2, dims);
+
+    rfProcess(testArray);
+
+    onCond->write(FallingEdge);
+    rfProcess(testArray);
+
+    int trigs, counts, pending, ignored;
+    triggerCount->read(&trigs);
+    storedSamples->read(&counts);
+    ignoredCount->read(&ignored);
+    bufferedTrigs->read(&ignored);
+
+    BOOST_CHECK_EQUAL(trigs, 0);
+    BOOST_CHECK_EQUAL(counts, 20);
+    BOOST_CHECK_EQUAL(ignored, 0);
+    BOOST_CHECK_EQUAL(pending, 0);
 }
 
 BOOST_AUTO_TEST_SUITE_END()

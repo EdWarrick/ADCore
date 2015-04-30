@@ -98,11 +98,21 @@ record(longout, "$(P)$(R)TriggerChannel") {
   field(PINI, "1")
 }
 
-record(bo, "$(P)$(R)TriggerOnCond") {
+record(mbbo, "$(P)$(R)TriggerOnCond") {
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT) 0)REFRAME_START_COND")
-  field(ZNAM, "Below Threshold")
-  field(ONAM, "Above Threshold")
+  field(ZRST, "Below Threshold")
+  field(ZRVL, "0")
+  field(ONST, "Above Threshold")
+  field(ONVL, "1")  
+  field(TWST, "Rising Edge")
+  field(TWVL, "2")
+  field(THST, "Falling Edge")
+  field(THVL, "3")
+  field(FRST, "Always On")
+  field(FRVL, "4")
+  field(FVST, "Always Off")
+  field(FVVL, "5")
   field(VAL, "1")
   field(PINI, "1")
 }
@@ -114,11 +124,21 @@ record(ao, "$(P)$(R)TriggerOnThresh") {
   field(PINI, "1")
 }
 
-record(bo, "$(P)$(R)TriggerOffCond") {
+record(mbbo, "$(P)$(R)TriggerOffCond") {
   field(DTYP, "asynInt32")
   field(OUT, "@asyn($(PORT) 0)REFRAME_END_COND")
-  field(ZNAM, "Below Threshold")
-  field(ONAM, "Above Threshold")
+  field(ZRST, "Below Threshold")
+  field(ZRVL, "0")
+  field(ONST, "Above Threshold")
+  field(ONVL, "1")  
+  field(TWST, "Rising Edge")
+  field(TWVL, "2")
+  field(THST, "Falling Edge")
+  field(THVL, "3")
+  field(FRST, "Always On")
+  field(FRVL, "4")
+  field(FVST, "Always Off")
+  field(FVVL, "5")
   field(VAL, "0")
   field(PINI, "1")
 }
