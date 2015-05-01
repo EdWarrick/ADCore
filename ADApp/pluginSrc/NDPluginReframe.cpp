@@ -290,9 +290,11 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   getIntegerParam(NDPluginReframeOverlappingTriggers, &overlap);
   getIntegerParam(NDPluginReframeIgnoredCount, &ignoredTrigs);
 
+  this->unlock();
   // If no trigger has been detected, don't output anything (will arise if we got a bad input array before seeing any triggers).
   if (trig->startOffset < 0 || arrayBuffer_->empty()) {
       asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: Short circuit return (%d, %d)\n", driverName, functionName, trig->startOffset, arrayBuffer_->empty());
+      this->lock();
       return NULL;
   }
 
@@ -361,6 +363,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
       outputArray = this->pNDArrayPool->alloc(2, dims, NDFloat64, 0, NULL);
   else {
       asynPrint(this->pasynUserSelf, ASYN_TRACE_FLOW, "%s:%s: Short-circuit return (unrecognised data type)\n", driverName, functionName);
+      this->lock();
       return NULL;
   }
 
@@ -463,6 +466,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
       }
 
       // If there is a carry array add it to the buffer
+      this->lock();
       if (carryArray) {
           arrayBuffer_->push_back(carryArray);
           setIntegerParam(NDPluginReframeBufferFrames, 1);
@@ -471,6 +475,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
           setIntegerParam(NDPluginReframeBufferFrames, 0);
           setIntegerParam(NDPluginReframeBufferSamples, 0);
       }
+      this->unlock();
 
       // Triggers will have been shifted if truncation occurred, so check if any are now before the start of the buffer:
       while (!triggerQueue_->empty() && triggerQueue_->front()->startOffset < 0) {
@@ -515,6 +520,7 @@ NDArray *NDPluginReframe::constructOutput(Trigger *trig)
   }
 
   // Handle the unique ID
+  this->lock();
   outputArray->uniqueId = arrayCount;
   arrayCount++;
   setIntegerParam(NDPluginReframeTriggerTotal, arrayCount);
@@ -866,6 +872,7 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
     // It should also clear the trigger buffer if the trigger conditions change.
     //   Should it? Can't we just handle this case?
     //   It does muck up truncation, since we need to re-test for triggers sometimes and we don't store the condition we used.
+    //   I think it does make sense to clear any pending triggers if the trigger conditions change.
     // Note changing trigger conditions should probably reset edge latch too.
     int function = pasynUser->reason;
     asynStatus status = asynSuccess;
@@ -909,6 +916,7 @@ asynStatus NDPluginReframe::writeInt32(asynUser *pasynUser, epicsInt32 value)
             setIntegerParam(NDPluginReframeMode, Idle);
         }
     } else if (function == NDPluginReframeTriggerStartCondition) {
+        // ###TODO: This should be done for changing the threshold also.
         triggerOnArmed_ = false;
     } else if (function == NDPluginReframeTriggerEndCondition) {
         triggerOffArmed_ = false;
@@ -979,7 +987,7 @@ NDPluginReframe::NDPluginReframe(const char *portName, int queueSize, int blocki
     triggerOffIndex_ = 0;
     triggerOnArmed_ = false;
     triggerOffArmed_ = false;
-    // General
+
     createParam(NDPluginReframeControlString,               asynParamInt32,   &NDPluginReframeControl);
     createParam(NDPluginReframeStatusString,                asynParamOctet,   &NDPluginReframeStatus);
     createParam(NDPluginReframeSoftTriggerString,           asynParamInt32,   &NDPluginReframeSoftTrigger);
