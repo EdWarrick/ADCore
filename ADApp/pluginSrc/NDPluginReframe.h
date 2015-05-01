@@ -121,6 +121,7 @@ private:
 
     // Data
     std::deque<NDArray *> *arrayBuffer_;
+    int bufferStartOffset_; // The offset into the buffer to treat as the first sample for trigger searches and output array construction.
     std::deque<Trigger *> *triggerQueue_;
     int triggerOnIndex_;
     int triggerOffIndex_;
